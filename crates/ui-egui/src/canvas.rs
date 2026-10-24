@@ -1508,6 +1508,17 @@ pub fn show(app: &mut CadApp, ui: &mut egui::Ui) {
             return;
         }
     }
+    if inside
+        && dbl_primary
+        && app.session.running.is_none()
+        && let Some(hp) = hover_pos
+        && let Some(h) = cadcraft_engine::cmd::curves::pick_at(&app.session, xf.to_world(hp))
+        && crate::attributedlg::open(app, h)
+    {
+        app.session.pending_window = None;
+        app.canvas.drag_window = false;
+        return;
+    }
     // Double-click text to edit it, as in AutoCAD: TEXTEDIT with that object already picked.
     if inside
         && dbl_primary

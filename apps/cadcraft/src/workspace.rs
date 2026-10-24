@@ -42,11 +42,15 @@ fn snapshot(ui: &UiState) -> Result<Value, String> {
     if ui.history_lines > 12 {
         return Err("historyLines must be between 0 and 12".into());
     }
+    if ui.hidden_toolbar_groups.len() > 64 || ui.hidden_toolbar_groups.iter().any(|name| name.len() > 256) {
+        return Err("hiddenToolbarGroups exceeds the workspace size limit".into());
+    }
     Ok(json!({
         "docking": ui.docking,
         "showToolsets": ui.show_toolsets,
         "showPalettes": ui.show_palettes,
         "showToolbar": ui.show_toolbar,
+        "hiddenToolbarGroups": ui.hidden_toolbar_groups,
         "showFileTabs": ui.show_file_tabs,
         "showStatusBar": ui.show_status_bar,
         "showCommandLine": ui.show_command_line,
@@ -211,6 +215,7 @@ mod tests {
             show_command_line: false,
             toolset_tab: "Modeling".into(),
             collapsed_groups: vec!["Solid".into()],
+            hidden_toolbar_groups: vec!["plot".into(), "inquiry".into()],
             history_lines: 5,
             dialog: Some("layers".into()),
             start_tab: true,
@@ -224,6 +229,7 @@ mod tests {
         let (_, restored, error) = Workspace::at(Some(path.clone()));
         assert!(error.is_none());
         let restored = restored.unwrap();
+        assert_eq!(restored.hidden_toolbar_groups, ["plot", "inquiry"]);
         assert_eq!(snapshot(&restored).unwrap(), snapshot(&ui).unwrap());
         assert!(restored.dialog.is_none() && !restored.start_tab);
         let mut transient_only = ui.clone();

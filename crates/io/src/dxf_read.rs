@@ -178,7 +178,7 @@ fn mtext_from(tags: &[Tag], c: &Common) -> MText {
     }
 }
 
-fn text_from(t: &T) -> Text {
+fn text_from(t: &T, vertical_code: i32) -> Text {
     let h = match t.i(72).unwrap_or(0) {
         1 => HAlign::Center,
         2 => HAlign::Right,
@@ -187,7 +187,9 @@ fn text_from(t: &T) -> Text {
         5 => HAlign::Fit,
         _ => HAlign::Left,
     };
-    let v = match t.i(73).or_else(|| t.i(74)).unwrap_or(0) {
+    // TEXT uses 73; ATTRIB and ATTDEF use 74. Their 73 is unused field length,
+    // often explicitly zero in DWG conversions, and must never override justification.
+    let v = match t.i(vertical_code).unwrap_or(0) {
         1 => VAlign::Bottom,
         2 => VAlign::Middle,
         3 => VAlign::Top,
@@ -370,14 +372,14 @@ fn entity_with_table_budget(kind: &str, tags: &[Tag], table_cells_left: &mut usi
         "HELIX" => EntityKind::Helix(helix(tags)),
         "RAY" => EntityKind::Ray(RayLine { base: t.p(10), dir: t.p(11) }),
         "XLINE" => EntityKind::XLine(RayLine { base: t.p(10), dir: t.p(11) }),
-        "TEXT" => EntityKind::Text(text_from(&t)),
+        "TEXT" => EntityKind::Text(text_from(&t, 73)),
         "MTEXT" => EntityKind::MText(mtext_from(tags, &c)),
         "ATTDEF" => {
             // A multiline definition has its text as embedded MTEXT after its own groups.
             let (own, embedded) = split_embedded(tags);
             let multiline = multiline_attrib(embedded, &c);
             let own = T(own);
-            let mut text = text_from(&own);
+            let mut text = text_from(&own, 74);
             if let Some(m) = &multiline {
                 text.value.clone_from(&m.read_as);
             }
@@ -1198,7 +1200,7 @@ fn parse_entities(
                             let (own, embedded) = split_embedded(t2);
                             let multiline = multiline_attrib(embedded, &common(&tt));
                             let own = T(own);
-                            let mut text = text_from(&own);
+                            let mut text = text_from(&own, 74);
                             if let Some(m) = &multiline {
                                 text.value.clone_from(&m.read_as);
                             }

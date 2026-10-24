@@ -15,6 +15,8 @@ const RECENT_CLEAR: &str = "ui.recent.clear";
 
 /// UI-only commands: (id, label, menu path, shortcut).
 pub const UI_COMMANDS: &[(&str, &str, &[&str], Option<&str>)] = &[
+    ("ui.toolbar.group", "Show or Hide Tool Group", &[], None),
+    ("ui.toolbar.reset", "Show All Tool Groups", &[], None),
     ("ui.spacemouse", "3D Mouse...", &["Tools", "3D Mouse..."], None),
     ("ui.spacemouse.calibrate", "Calibrate 3D Mouse", &[], None),
     ("ui.spacemouse.navigate", "3D Mouse Navigation", &[], None),
@@ -83,6 +85,23 @@ pub fn run_ui_command(app: &mut CadApp, id: &str, params: &Value) -> Option<Resu
 }
 
 fn run_ui_command_inner(app: &mut CadApp, id: &str, params: &Value) -> Option<Result<Value, String>> {
+    if id == "ui.toolbar.reset" {
+        app.ui.hidden_toolbar_groups.clear();
+        return Some(Ok(Value::Null));
+    }
+    if id == "ui.toolbar.group" {
+        let Some(group) = params.get("group").and_then(Value::as_str).filter(|id| crate::chrome::TOOLBAR_GROUPS.iter().any(|(known, _)| known == id))
+        else {
+            return Some(Err("group must name a toolbar group".into()));
+        };
+        let hidden = app.ui.hidden_toolbar_groups.iter().any(|id| id == group);
+        let visible = params.get("visible").and_then(Value::as_bool).unwrap_or(hidden);
+        app.ui.hidden_toolbar_groups.retain(|id| id != group);
+        if !visible {
+            app.ui.hidden_toolbar_groups.push(group.to_string());
+        }
+        return Some(Ok(json!({"group":group, "visible":visible})));
+    }
     if let Some(result) = crate::spacemouse::route(app, id, params) {
         return Some(result);
     }
@@ -408,6 +427,7 @@ fn run_ui_command_inner(app: &mut CadApp, id: &str, params: &Value) -> Option<Re
         "properties" | "pr" | "props" | "ch" if params.is_null() => {
             crate::docking::command(app, false, &json!({"operation":"open", "panel":"properties"}))
         }
+        "attedit" | "eattedit" | "ate" if params.is_null() && crate::attributedlg::open_selected(app) => Ok(Value::Null),
         _ => return None,
     };
     Some(r)
@@ -584,6 +604,7 @@ pub fn menu_bar(app: &mut CadApp, ui: &mut egui::Ui) {
                         }
                     });
                 }
+                ui.menu_button(crate::tl!("Panels"), |ui| crate::panel_menu::show(app, ui));
             });
         },
     );

@@ -1,6 +1,6 @@
 # UI parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-13 · **Change:** minor (stable dash anchors on filled-object highlights) · **Target:** Autodesk AutoCAD 2027 for Mac (26.0)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-24 · **Change:** minor (attribute editing and saved toolbar-group visibility; focused AutoCAD 2027 Windows comparison) · **Target:** Autodesk AutoCAD 2027 for Mac (26.0), with the focused Windows pass below
 
 How CADCraft's interaction compares with AutoCAD's: point entry, object snaps, tracking, dynamic
 input, grips, selection, the command line, chrome and navigation. A drafter's speed in AutoCAD
@@ -157,9 +157,10 @@ down-arrow options menu (DYNPROMPT), and DYNDIM.
 | Feature | AutoCAD for Mac | CADCraft |
 |---|---|---|
 | Menu bar | 11 menus, 491 leaf items | same 11 menus; 245/491 items covered (233 by `cargo xtask parity`, which counts engine commands only, plus 12 UI-only items: see [parity-checklist.md](parity-checklist.md)); once a menu is open, pointing at another title opens that menu (#1567) |
-| Tool Bar, File tabs, Start tab, layout tabs | yes | yes |
+| Tool Bar, File tabs, Start tab, layout tabs | yes | yes; right-click the top toolbar (buttons or blank space) to show/hide tool groups. The Panels menu also restores groups or the entire toolbar; group visibility is saved. This is a toolbar, not a full tabbed ribbon. |
 | Tool Sets palette (Drafting, Modeling, … with flyouts) | yes | yes for 2D groups |
-| Properties Inspector, Quick Properties | yes | yes (every control acts or is visibly unavailable, #182); block references show read-only Position X/Y/Z from their stored insertion point; coordinate editing is still missing |
+| Properties Inspector, Quick Properties | yes | yes (every control acts or is visibly unavailable, #182); a single block reference exposes editable attribute values and read-only Position X/Y/Z; coordinate editing is still missing |
+| Block attribute editor | values, text options, attribute properties | Double-click an attributed block, or ATTEDIT/EATTEDIT with one selected, opens an attribute value dialog with Apply, OK and Cancel; constant values are read-only. Text-formatting and per-attribute property tabs remain missing; without a selected block the command uses prompts. |
 | Layer Properties Manager (filters, states, VP overrides) | yes | yes |
 | Blocks palette, Content | yes | Blocks window (click to insert, #28) |
 | Status bar toggles | ~25 | most toggles; Annotation Visibility and Workspace do nothing |
@@ -170,6 +171,36 @@ down-arrow options menu (DYNPROMPT), and DYNDIM.
 | Customisation (CUI, aliases editor, tool palettes) | yes | Command Aliases dialog (ALIASEDIT, #1381); no CUI or tool palettes |
 | Themes | Dark, Light | Dark, Light, System (#179) |
 | Accessibility | VoiceOver basics | AccessKit through eframe; screen-reader coverage untested; magnifier issue #39; animation effects follow the OS setting (View ▸ Accessibility ▸ Animation Effects: System, On, Off) |
+
+### Focused Windows comparison (2026-10-24)
+
+The block-attribute pass used AutoCAD 2027 on Windows and an isolated copy of a user drawing.
+It does not refresh the older global percentages above. The imported power-adapter title uses
+middle/center justification; its value is visible in AutoCAD's Properties palette and attribute
+editor. CADCraft now imports that justification and exposes the value in both corresponding
+editing surfaces. Apply, Cancel and Undo were exercised in CADCraft's UI, and the reported crop
+renders identically after CADCraft DXF and DWG save/reopen. This is local visual evidence, not
+proof that the complete DWG round-trips without loss.
+
+Next comparisons, in order:
+
+1. Attribute text options: style, justification, height, width factor, rotation and oblique angle.
+   AutoCAD exposes these per reference; CADCraft's new dialog currently edits values only.
+   Verify that changing one option preserves all others and that Undo and save/reopen agree.
+2. Multiline attributes: editing and wrapping, with Cancel leaving the original content intact.
+   File-format support does not establish an equivalent interactive editor.
+3. Multiple selected block references: common attribute values, mixed-value feedback and one-step
+   Undo. The current Properties implementation deliberately handles one reference.
+4. Per-attribute layer, colour and line properties, separate from the enclosing block's properties.
+
+Public behavior reference: [AutoCAD 2027 Enhanced Attribute Editor](https://help.autodesk.com/cloudhelp/2027/ENU/AutoCAD-Core/files/GUID-414DC467-291B-4A52-A70D-1165CDEA8B39.htm).
+No Autodesk assets or private drawing fixtures are included in the repository.
+
+The toolbar visibility pass addresses the reported missing right-click menu. AutoCAD's
+[ribbon display controls](https://help.autodesk.com/view/ACD/2027/ENU/?caas=caas%2Fdocumentation%2FCIV3D%2F2014%2FENU%2FfilesACD%2FGUID-627FCA86-38B1-404B-BB09-9FC3348B54F2-htm.html)
+include checked panel visibility. CADCraft now offers the equivalent choice for its existing
+top tool groups, including restoration after hiding all groups. Tabbed ribbons, floating tool
+groups and ribbon minimization modes remain separate gaps.
 
 ## Navigation (≈ 55%)
 
@@ -218,3 +249,5 @@ down-arrow options menu (DYNPROMPT), and DYNDIM.
 | 2026-10-11 | minor | Object snap tracking, Extension, Parallel, Apparent Intersection, additional polar angles (#379): tracking 30% → 70%, object snaps 40% → 45%; total 43% → 48% |
 | 2026-10-10 | minor | Dynamic input 15% → 45% (pointer boxes, #60); press-drag windows (#63); total 40% → 43% |
 | 2026-10-10 | major | First UI-parity audit: point entry, snaps, tracking, dynamic input, grips, selection, command line, chrome, navigation, keys |
+| 2026-10-24 | minor | Single-reference attribute values in Properties; double-click and selected ATTEDIT/EATTEDIT open an undoable value editor with Apply/Cancel. Reference observed in AutoCAD 2027 on Windows; formatting tabs remain a gap. |
+| 2026-10-24 | minor | Toolbar context menu and Panels menu expose checked tool-group visibility, Show All Tool Groups, side-panel visibility and interface bars. Tool-group choices persist in UI settings. |

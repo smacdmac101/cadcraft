@@ -9,6 +9,18 @@ use crate::theme::Tokens;
 
 pub mod annoscale;
 
+/// Stable visibility IDs and user-facing labels, in TOOLBAR order.
+pub(crate) const TOOLBAR_GROUPS: &[(&str, &str)] = &[
+    ("file", "File"),
+    ("undo", "Undo / Redo"),
+    ("plot", "Plot / Publish"),
+    ("exchange", "Import / Export"),
+    ("navigation", "Navigation"),
+    ("palettes", "Palettes"),
+    ("inquiry", "Inquiry"),
+    ("help", "Help"),
+];
+
 const TOOLBAR: &[&[(Icon, &str, &str, Option<&str>)]] = &[
     &[
         (Icon::New, "new", "New Drawing", Some("Cmd+N")),
@@ -91,20 +103,32 @@ pub fn title_and_toolbar(app: &mut CadApp, ui: &mut egui::Ui) {
         }
         if tb_h > 0.0 {
             let row = Rect::from_min_size(pos2(r.left(), r.top() + title_h), vec2(r.width(), tb_h));
+            // Register the background first so toolbar buttons retain their normal clicks.
+            // Union their responses below so right-click works over both buttons and gaps.
+            // The background is a pointer target, not an extra stop in keyboard traversal.
+            let mut context = ui.interact(row, ui.id().with("toolbar_context"), Sense::CLICK);
+            let toolbar: Vec<_> = TOOLBAR
+                .iter()
+                .enumerate()
+                .filter(|(index, _)| TOOLBAR_GROUPS.get(*index).is_none_or(|(id, _)| !app.ui.hidden_toolbar_groups.iter().any(|hidden| hidden == id)))
+                .map(|(_, group)| *group)
+                .collect();
             let mut x = r.left() + if app.integrated_titlebar { 120.0 } else { 12.0 };
             let size = 26.0;
             let mut clicked = None;
             let mac = ui.ctx().os().is_mac();
-            let widths: Vec<_> = TOOLBAR.iter().map(|group| group.len() as f32 * (size + 6.0) - 6.0).collect();
+            let widths: Vec<_> = toolbar.iter().map(|group| group.len() as f32 * (size + 6.0) - 6.0).collect();
             let available = (row.right() - 12.0 - x).max(0.0);
             let Some(fit) = craft_ui::layout::fit_toolbar(&widths, available, 24.0, 30.0) else {
                 // Very small windows still expose the complete command row by scrolling.
                 ui.scope_builder(egui::UiBuilder::new().max_rect(row.shrink2(vec2(4.0, 0.0))), |ui| {
                     egui::ScrollArea::horizontal().id_salt("toolbar_small").show(ui, |ui| {
                         ui.horizontal(|ui| {
-                            for group in TOOLBAR {
+                            for group in &toolbar {
                                 for (icon, cmd, tip, _) in *group {
-                                    if icons::button(ui, *icon, size, tip, false).clicked() {
+                                    let response = icons::button(ui, *icon, size, tip, false);
+                                    context |= response.clone();
+                                    if response.clicked() {
                                         clicked = Some(*cmd);
                                     }
                                 }
@@ -113,16 +137,18 @@ pub fn title_and_toolbar(app: &mut CadApp, ui: &mut egui::Ui) {
                         });
                     });
                 });
+                context.context_menu(|ui| crate::panel_menu::show(app, ui));
                 if let Some(command) = clicked {
                     app.start(command);
                 }
                 return;
             };
             for (index, _) in &fit.shown {
-                let Some(group) = TOOLBAR.get(*index) else { continue };
+                let Some(group) = toolbar.get(*index) else { continue };
                 for (icon, cmd, label, shortcut) in group.iter() {
                     let br = Rect::from_min_size(pos2(x, row.center().y - size / 2.0), vec2(size, size));
                     let resp = ui.interact(br, ui.id().with(("tb", *cmd)), Sense::click());
+                    context |= resp.clone();
                     if resp.hovered() {
                         ui.painter().rect_filled(br, 3.0, t.control_hover.gamma_multiply(0.6));
                     }
@@ -142,6 +168,7 @@ pub fn title_and_toolbar(app: &mut CadApp, ui: &mut egui::Ui) {
             if !fit.overflow.is_empty() {
                 let br = Rect::from_min_size(pos2(x, row.center().y - size / 2.0), vec2(fit.overflow_width, size));
                 let response = ui.interact(br, ui.id().with("toolbar_more"), Sense::click());
+                context |= response.clone();
                 if response.hovered() {
                     ui.painter().rect_filled(br, 3.0, t.control_hover.gamma_multiply(0.6));
                 }
@@ -151,7 +178,7 @@ pub fn title_and_toolbar(app: &mut CadApp, ui: &mut egui::Ui) {
                 icons::describe_control(ui, &response, "More toolbar commands", None, false);
                 egui::Popup::menu(&response).show(|ui| {
                     for (position, index) in fit.overflow.iter().enumerate() {
-                        let Some(group) = TOOLBAR.get(*index) else { continue };
+                        let Some(group) = toolbar.get(*index) else { continue };
                         if position > 0 {
                             ui.separator();
                         }
@@ -167,6 +194,7 @@ pub fn title_and_toolbar(app: &mut CadApp, ui: &mut egui::Ui) {
                 });
                 response.on_hover_text(crate::tl!("More toolbar commands"));
             }
+            context.context_menu(|ui| crate::panel_menu::show(app, ui));
             if let Some(c) = clicked {
                 app.start(c);
             }

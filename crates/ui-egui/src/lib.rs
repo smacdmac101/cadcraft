@@ -10,6 +10,7 @@
 
 pub mod aliasdlg;
 pub mod animation;
+mod attributedlg;
 pub mod autosave;
 pub mod bedit;
 pub mod canvas;
@@ -24,6 +25,7 @@ pub mod dialogs;
 pub mod docking;
 pub mod hatchdlg;
 mod mtext_editor;
+mod panel_menu;
 pub mod spacemouse;
 // The External References palette.
 pub mod xrefs;
@@ -74,6 +76,8 @@ pub struct UiState {
     pub show_toolsets: bool,
     pub show_palettes: bool,
     pub show_toolbar: bool,
+    /// Stable IDs of top toolbar groups hidden by the user.
+    pub hidden_toolbar_groups: Vec<String>,
     pub show_file_tabs: bool,
     pub show_status_bar: bool,
     pub show_command_line: bool,
@@ -160,6 +164,7 @@ impl Default for UiState {
             show_toolsets: true,
             show_palettes: true,
             show_toolbar: true,
+            hidden_toolbar_groups: Vec::new(),
             show_file_tabs: true,
             show_status_bar: true,
             show_command_line: true,
