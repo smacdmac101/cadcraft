@@ -3,6 +3,8 @@ use crate::{CadApp, docking::Panel};
 use serde_json::json;
 
 pub(crate) fn show(app: &mut CadApp, ui: &mut egui::Ui) {
+    ui.menu_button(crate::tl!("Ribbon Options"), |ui| crate::ribbon::customize(app, ui));
+    ui.separator();
     ui.label(crate::tl!("Tool Groups"));
     for (id, label) in crate::chrome::TOOLBAR_GROUPS {
         let mut visible = !app.ui.hidden_toolbar_groups.iter().any(|hidden| hidden == id);
@@ -62,7 +64,8 @@ mod tests {
     #[test]
     fn toolbar_context_menu_works_on_buttons_and_empty_space() {
         for x in [25.0, 1500.0] {
-            let app = CadApp::new(Session::default(), Services::default());
+            let mut app = CadApp::new(Session::default(), Services::default());
+            app.ui.show_ribbon = false; // This test exercises the full classic toolbar.
             let mut h = Harness::builder().with_size(vec2(1600.0, 700.0)).build_ui_state(|ui, app| crate::chrome::title_and_toolbar(app, ui), app);
             h.run_steps(3);
             let pos = pos2(x, 17.0);

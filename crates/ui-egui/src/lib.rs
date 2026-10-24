@@ -26,6 +26,7 @@ pub mod docking;
 pub mod hatchdlg;
 mod mtext_editor;
 mod panel_menu;
+pub mod ribbon;
 pub mod spacemouse;
 // The External References palette.
 pub mod xrefs;
@@ -76,6 +77,8 @@ pub struct UiState {
     pub show_toolsets: bool,
     pub show_palettes: bool,
     pub show_toolbar: bool,
+    pub show_ribbon: bool,
+    pub ribbon: ribbon::State,
     /// Stable IDs of top toolbar groups hidden by the user.
     pub hidden_toolbar_groups: Vec<String>,
     pub show_file_tabs: bool,
@@ -164,6 +167,8 @@ impl Default for UiState {
             show_toolsets: true,
             show_palettes: true,
             show_toolbar: true,
+            show_ribbon: false,
+            ribbon: ribbon::State::default(),
             hidden_toolbar_groups: Vec::new(),
             show_file_tabs: true,
             show_status_bar: true,
@@ -641,6 +646,7 @@ impl CadApp {
         if self.ui.in_window_menu {
             menus::menu_bar(self, ui);
         }
+        ribbon::show(self, ui);
         if self.ui.show_status_bar {
             chrome::status_bar(self, ui);
         }
@@ -648,7 +654,7 @@ impl CadApp {
             chrome::file_tabs(self, ui);
         }
         let has_doc = !self.session.docs.is_empty() && !self.ui.start_tab;
-        if has_doc && !self.ui.show_toolsets {
+        if has_doc && !self.ui.show_toolsets && !self.ui.show_ribbon {
             palettes::toolsets_strip(self, ui);
         }
         egui::CentralPanel::default().frame(egui::Frame::NONE.fill(t.canvas)).show(ui, |ui| {

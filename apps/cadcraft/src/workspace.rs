@@ -33,6 +33,7 @@ fn config_dir_from(platform: &str, get: impl Fn(&str) -> Option<OsString>) -> Op
 
 fn snapshot(ui: &UiState) -> Result<Value, String> {
     ui.docking.validate()?;
+    ui.ribbon.validate()?;
     if !matches!(ui.toolset_tab.as_str(), "Drafting" | "Modeling") {
         return Err("toolsetTab must be Drafting or Modeling".into());
     }
@@ -45,12 +46,18 @@ fn snapshot(ui: &UiState) -> Result<Value, String> {
     if ui.hidden_toolbar_groups.len() > 64 || ui.hidden_toolbar_groups.iter().any(|name| name.len() > 256) {
         return Err("hiddenToolbarGroups exceeds the workspace size limit".into());
     }
+    if ui.hidden_tools.len() > 512 || ui.hidden_tools.iter().any(|name| name.len() > 128) {
+        return Err("hiddenTools exceeds the workspace size limit".into());
+    }
     Ok(json!({
         "docking": ui.docking,
         "showToolsets": ui.show_toolsets,
         "showPalettes": ui.show_palettes,
         "showToolbar": ui.show_toolbar,
+        "showRibbon": ui.show_ribbon,
+        "ribbon": ui.ribbon,
         "hiddenToolbarGroups": ui.hidden_toolbar_groups,
+        "hiddenTools": ui.hidden_tools,
         "showFileTabs": ui.show_file_tabs,
         "showStatusBar": ui.show_status_bar,
         "showCommandLine": ui.show_command_line,
@@ -210,17 +217,24 @@ mod tests {
         let path = directory.join("workspace.json");
         let (mut first, restored, error) = Workspace::at(Some(path.clone()));
         assert!(restored.is_none() && error.is_none());
-        let ui = UiState {
+        let mut ui = UiState {
             show_palettes: false,
+            show_ribbon: true,
             show_command_line: false,
             toolset_tab: "Modeling".into(),
             collapsed_groups: vec!["Solid".into()],
             hidden_toolbar_groups: vec!["plot".into(), "inquiry".into()],
+            hidden_tools: vec!["line".into()],
             history_lines: 5,
             dialog: Some("layers".into()),
             start_tab: true,
             ..Default::default()
         };
+        ui.ribbon.active_tab = "insert".into();
+        ui.ribbon.hidden_panels = vec!["home.draw".into()];
+        ui.ribbon.hidden_tabs = vec!["output".into()];
+        ui.ribbon.minimized = true;
+        ui.docking.auto_hide = vec![cadcraft_ui_egui::docking::Panel::Properties];
         first.save_if_changed(&ui).unwrap();
         let bytes = fs::read(&path).unwrap();
         let value: Value = serde_json::from_slice(&bytes).unwrap();
@@ -230,6 +244,10 @@ mod tests {
         assert!(error.is_none());
         let restored = restored.unwrap();
         assert_eq!(restored.hidden_toolbar_groups, ["plot", "inquiry"]);
+        assert_eq!(restored.ribbon, ui.ribbon);
+        assert_eq!(restored.hidden_tools, ["line"]);
+        assert!(restored.show_ribbon);
+        assert_eq!(restored.docking.auto_hide, ui.docking.auto_hide);
         assert_eq!(snapshot(&restored).unwrap(), snapshot(&ui).unwrap());
         assert!(restored.dialog.is_none() && !restored.start_tab);
         let mut transient_only = ui.clone();

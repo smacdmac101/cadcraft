@@ -189,3 +189,45 @@ retained and the result's `shown` is `en`. `ui.set` also accepts
 `{"interfaceLanguage":"uk"}`; `ui.inspect` reports the saved choice in its UI state.
 Invalid choices leave the current language unchanged. Menus, command labels and prompt text
 returned by the control channel retain their English source text. See [localization.md](localization.md).
+
+## Ribbon configuration
+
+These UI commands run through `engine.execute` (or `command`), with the same command envelope
+as the examples above. They change the saved UI workspace and do not edit drawing contents.
+
+| Command | Parameters | Effect |
+|---|---|---|
+| `ribbon` / `ribbonclose` | `{}` | Show / hide the ribbon. |
+| `ui.toggle.ribbon` | `{on?: bool}` | Set visibility, or toggle it when omitted. |
+| `ui.ribbon.tab` | `{tab, visible?: bool}` | With `visible`, show/hide the tab; otherwise select and reveal it. |
+| `ui.ribbon.panel` | `{tab?: active tab, panel, visible?: bool}` | Show/hide a panel within that tab; omitted `visible` toggles it. |
+| `ui.ribbon.options` | `{minimized?: bool, titles?: bool}` | Configure panel expansion and title visibility. |
+| `ui.ribbon.reset` | `{}` | Show and restore the default drafting ribbon; Modeling remains available through Show Tabs or moving the Modeling tool set. |
+
+Drafting tab IDs are `home`, `insert`, `annotate`, `parametric`, `view`, `manage`, `output`.
+Panel IDs are available in `ribbon::TABS`; for example Home has `draw`, `modify`, `annotation`,
+`layers`, `block`, `properties`, `utilities`, `clipboard`. Saved hidden panel IDs are qualified (`home.draw`).
+`ui.inspect` reports `ui.showRibbon` and `ui.ribbon`. Unknown IDs or non-boolean options return
+an error without partially applying settings. The Panels menu remains an interactive recovery
+path if every ribbon tab or the entire ribbon is hidden.
+
+`ui.toolsets.ribbon {}` moves the current Drafting/Modeling Tool Sets presentation into the
+ribbon and hides the duplicate palette. `ui.toolsets.palette {}` switches back and restores
+the palette's previous placement, including a floating position. Modeling is an optional `modeling` tab, revealed when moving
+the Modeling tool set. Both views use the same tool definitions and `hiddenTools` preferences;
+`ui.toolsets.tools.reset {}` clears those per-tool visibility choices. Existing workspace files
+retain their palette presentation until the ribbon is selected.
+
+`ui.dock {operation:"autoHide", panel, enabled:bool}` sets a palette's saved auto-hide choice.
+It is separate from closing the palette: closed palettes have no hover target, and reopening
+retains the auto-hide choice. Docked palettes show narrow tabs on their saved side; floating
+palettes retain a collapsed title bar. Hover (or click) opens the palette over the canvas;
+leaving closes it after a short delay. Open menus, pointer interactions and focused editors
+keep the flyout usable. Keep Open switches auto-hide off without changing saved placement.
+The canvas cannot auto-hide. Reset Panel Layout clears these choices with the rest of the layout.
+
+To return a floating palette to a side, execute `ui.dock` with
+`{"operation":"dock","panel":"toolSets","zone":"left"}` (`right` also works). This preserves
+the palette width within its size limits. The same command is exposed by floating title-bar
+buttons and palette title context menus. Invalid zones are rejected atomically; closing an
+already closed palette is idempotent. The protected drawing view cannot be docked as a palette.

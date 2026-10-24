@@ -75,6 +75,13 @@ fn missing_commands_menus_tools_and_snap_labels(language: &str) -> Vec<String> {
         }
     }
     sources.extend(cadcraft_engine::snap::mode::ALL.iter().map(|(_, name)| *name));
+    for tab in crate::ribbon::TABS {
+        sources.insert(tab.label);
+        for panel in tab.panels {
+            sources.insert(panel.label);
+            sources.extend(crate::ribbon::tools(panel).into_iter().map(|(_, _, label)| label));
+        }
+    }
     sources.into_iter().filter(|s| !s.is_empty() && !catalog.contains_key(&("", *s))).map(str::to_string).collect()
 }
 
@@ -91,6 +98,9 @@ fn missing_marked_ui_literals(language: &str) -> BTreeSet<String> {
         include_str!("../xrefs.rs"),
         include_str!("../canvas.rs"),
         include_str!("../chrome.rs"),
+        include_str!("../ribbon.rs"),
+        include_str!("../docking.rs"),
+        include_str!("../docking/auto_hide.rs"),
         include_str!("../cmdline.rs"),
         include_str!("../credits.rs"),
         include_str!("../palettes/quickcalc.rs"),

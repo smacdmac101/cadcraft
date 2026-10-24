@@ -49,6 +49,18 @@ People trust CADCraft with their drawings; a crash loses their work. **This outr
 ## Roadmap
 `ROADMAP.md` (committed) is the one-page summary: stage, parity numbers, estimates. It follows craftrules' `standards/progress-docs.md`: the assessment is `docs/target-app-parity.md`, the work list `docs/gaps.md` (pick work from its top rows), milestones `docs/roadmap.md`, deep checklists `docs/geometry-parity.md`, `docs/ui-parity.md`, `docs/file-format-parity.md`, `docs/hardware-parity.md`, `docs/localization-parity.md`. When work lands, update the affected rows and the docs' status lines and revision history. `cargo xtask parity` regenerates the menu-breadth checklist in `docs/parity-checklist.md`.
 
+## Fork contribution records
+
+- Record every behavior, compatibility, test, localization and documentation change in
+  [`docs/fork-changes.md`](docs/fork-changes.md), including changes made before this rule.
+- Give each meaningful change a stable `CC-` identifier, describe its trigger and resulting
+  behavior, list the affected files and record validation evidence and remaining limitations.
+- Keep feature commits focused and include their change identifiers and validation in the
+  commit body. Published earlier commits are mapped by the ledger; preserve their hashes.
+- Update the ledger and relevant parity documents in the same change. Before proposing an
+  upstream PR, use these records to explain scope, reproduction and tests. Keep private drawing
+  files, local credentials and Autodesk screenshots/assets out of the contribution.
+
 ## Contributor credits (About window)
 
 - About ▸ Contributors/Models are compiled into the binary from `contributors/contributors.json`

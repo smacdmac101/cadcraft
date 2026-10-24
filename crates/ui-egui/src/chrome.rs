@@ -118,7 +118,9 @@ pub fn title_and_toolbar(app: &mut CadApp, ui: &mut egui::Ui) {
             let mut clicked = None;
             let mac = ui.ctx().os().is_mac();
             let widths: Vec<_> = toolbar.iter().map(|group| group.len() as f32 * (size + 6.0) - 6.0).collect();
-            let available = (row.right() - 12.0 - x).max(0.0);
+            // With the ribbon open this is a compact quick-access row; other classic tools
+            // remain in its overflow menu. Closing the ribbon restores the full toolbar.
+            let available = (row.right() - 12.0 - x).max(0.0).min(if app.ui.show_ribbon { 280.0 } else { f32::INFINITY });
             let Some(fit) = craft_ui::layout::fit_toolbar(&widths, available, 24.0, 30.0) else {
                 // Very small windows still expose the complete command row by scrolling.
                 ui.scope_builder(egui::UiBuilder::new().max_rect(row.shrink2(vec2(4.0, 0.0))), |ui| {

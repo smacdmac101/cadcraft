@@ -15,6 +15,16 @@ const RECENT_CLEAR: &str = "ui.recent.clear";
 
 /// UI-only commands: (id, label, menu path, shortcut).
 pub const UI_COMMANDS: &[(&str, &str, &[&str], Option<&str>)] = &[
+    ("ui.toggle.ribbon", "Ribbon", &["Window", "Ribbon"], None),
+    ("ui.toolsets.ribbon", "Move to Ribbon", &[], None),
+    ("ui.toolsets.palette", "Move to Tool Sets", &[], None),
+    ("ui.toolsets.tools.reset", "Show All Tools", &[], None),
+    ("ribbon", "Show Ribbon", &[], None),
+    ("ribbonclose", "Hide Ribbon", &[], None),
+    ("ui.ribbon.tab", "Ribbon Tab", &[], None),
+    ("ui.ribbon.panel", "Ribbon Panel", &[], None),
+    ("ui.ribbon.options", "Ribbon Options", &[], None),
+    ("ui.ribbon.reset", "Restore Ribbon", &[], None),
     ("ui.toolbar.group", "Show or Hide Tool Group", &[], None),
     ("ui.toolbar.reset", "Show All Tool Groups", &[], None),
     ("ui.spacemouse", "3D Mouse...", &["Tools", "3D Mouse..."], None),
@@ -85,6 +95,9 @@ pub fn run_ui_command(app: &mut CadApp, id: &str, params: &Value) -> Option<Resu
 }
 
 fn run_ui_command_inner(app: &mut CadApp, id: &str, params: &Value) -> Option<Result<Value, String>> {
+    if let Some(result) = crate::ribbon::route(app, id, params) {
+        return Some(result);
+    }
     if id == "ui.toolbar.reset" {
         app.ui.hidden_toolbar_groups.clear();
         return Some(Ok(Value::Null));
