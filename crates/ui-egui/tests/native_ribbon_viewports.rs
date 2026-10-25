@@ -13,6 +13,7 @@ use std::{cell::RefCell, rc::Rc};
 struct Host {
     viewports: egui::ViewportIdMap<ViewportInfo>,
     sizes: egui::ViewportIdMap<egui::Vec2>,
+    modifiers: egui::Modifiers,
     resize_delay: u8,
     position_delay: u8,
     events: Vec<Event>,
@@ -50,6 +51,8 @@ fn host() -> (Context, Rc<RefCell<Host>>) {
             ..Default::default()
         };
         h.viewports.insert(viewport.ids.this, info);
+        let modifiers = h.modifiers;
+        h.events.insert(0, Event::ModifiersChanged(modifiers));
         let raw = RawInput {
             viewport_id: viewport.ids.this,
             viewports: h.viewports.clone(),
@@ -291,4 +294,73 @@ fn whole_ribbon_waits_for_native_resize_and_then_persists_user_resizing() {
     host.borrow_mut().sizes.insert(id, vec2(800.0, 300.0));
     frame(&ctx, &host, &mut app);
     assert_eq!(app.ui.ribbon.window.size, [800.0, 300.0]);
+}
+
+#[test]
+fn native_ribbon_programmatic_placement_does_not_dock_but_user_move_does() {
+    for allow in [true, false] {
+        let (ctx, host) = host();
+        let mut app = CadApp::new(Session::default(), Services::default());
+        app.run("ribbon", json!({})).unwrap();
+        app.run("ui.ribbon.window", json!({"floating":true,"desktopPosition":[450,100],"allowDocking":allow})).unwrap();
+        for _ in 0..40 {
+            frame(&ctx, &host, &mut app);
+        }
+        assert!(app.ui.ribbon.window.floating, "saved edge placement must not dock");
+        host.borrow_mut().position = egui::pos2(500.0, 110.0);
+        for _ in 0..60 {
+            frame(&ctx, &host, &mut app);
+        }
+        assert_eq!(app.ui.ribbon.window.floating, !allow, "user drag docking toggle");
+        assert!(app.ui.ribbon.window.anchor.is_none());
+    }
+}
+
+#[test]
+fn native_floating_auto_hide_retains_expanded_size_and_can_reveal_on_hover() {
+    let (ctx, host) = host();
+    let mut app = CadApp::new(Session::default(), Services::default());
+    app.run("ribbon", json!({})).unwrap();
+    app.run("ui.ribbon.window", json!({"floating":true,"autoHide":true,"desktopPosition":[2000,250]})).unwrap();
+    for _ in 0..40 {
+        frame(&ctx, &host, &mut app);
+    }
+    let id = ViewportId::from_hash_of("cadcraft-whole-ribbon");
+    assert_eq!(host.borrow().sizes[&id].x, 32.0);
+    assert_eq!(app.ui.ribbon.window.size, [360.0, 520.0]);
+    host.borrow_mut().events = vec![Event::PointerMoved(egui::pos2(16.0, 100.0))];
+    for _ in 0..8 {
+        frame(&ctx, &host, &mut app);
+    }
+    assert_eq!(host.borrow().sizes[&id].x, 360.0);
+    assert_eq!(app.ui.ribbon.window.size, [360.0, 520.0]);
+    host.borrow_mut().events = vec![Event::PointerGone];
+    for _ in 0..60 {
+        frame(&ctx, &host, &mut app);
+    }
+    assert_eq!(host.borrow().sizes[&id].x, 32.0);
+    assert_eq!(app.ui.ribbon.window.size, [360.0, 520.0]);
+    assert_eq!(app.ui.ribbon.window.desktop_position, Some([2000.0, 250.0]));
+}
+
+#[test]
+fn native_ribbon_control_drag_bypasses_edge_docking() {
+    let (ctx, host) = host();
+    let mut app = CadApp::new(Session::default(), Services::default());
+    app.run("ribbon", json!({})).unwrap();
+    app.run("ui.ribbon.window", json!({"floating":true,"desktopPosition":[500,400]})).unwrap();
+    for _ in 0..10 {
+        frame(&ctx, &host, &mut app);
+    }
+    host.borrow_mut().modifiers = egui::Modifiers::CTRL;
+    host.borrow_mut().position = egui::pos2(500.0, 110.0);
+    for _ in 0..60 {
+        frame(&ctx, &host, &mut app);
+    }
+    assert!(app.ui.ribbon.window.floating);
+    host.borrow_mut().modifiers = egui::Modifiers::NONE;
+    for _ in 0..60 {
+        frame(&ctx, &host, &mut app);
+    }
+    assert!(app.ui.ribbon.window.floating, "releasing Ctrl after the move must not dock later");
 }

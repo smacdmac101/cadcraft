@@ -489,7 +489,8 @@ pub fn show(app: &mut crate::CadApp, ui: &mut egui::Ui) {
     let viewport = ui.available_rect_before_wrap();
     let (output, queued) = {
         let mut content = Content { app, queued: Vec::new() };
-        let (canvas_rect, blockers) = auto_hide::show(&mut content, ui, &workspace, viewport, reveal);
+        let (canvas_rect, mut blockers) = auto_hide::show(&mut content, ui, &workspace, viewport, reveal);
+        blockers.extend(crate::ribbon::anchor_blockers(ui.ctx()));
         let output = ui
             .scope_builder(egui::UiBuilder::new().max_rect(canvas_rect), |ui| {
                 DockArea::new(egui::Id::new("cadcraft-docking")).blocked_rects(&blockers).show_customized(

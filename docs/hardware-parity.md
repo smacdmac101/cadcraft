@@ -1,6 +1,6 @@
 # Hardware parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-25 · **Change:** minor (native ribbon windows across monitors) · **Target:** Autodesk AutoCAD 2027 (Mac and Windows)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-25 · **Change:** minor (native ribbon windows, anchors and auto-hide) · **Target:** Autodesk AutoCAD 2027 (Mac and Windows)
 
 The hardware AutoCAD uses and how CADCraft compares, per platform. Work items:
 [gaps.md](gaps.md#hardware).
@@ -53,6 +53,7 @@ next step.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-25 | minor | CC-032–CC-034: floating ribbon roll-up retains expanded native geometry; app-edge docking is independent of monitor recovery. |
 | 2026-10-25 | minor | CC-028–CC-031: native individual and whole-ribbon windows, monitor geometry/DPI recovery, Windows two-monitor validation; other platforms remain unverified. |
 | 2026-10-13 | minor | Zoom and pan regenerate in the background: 2–4.5 s stalls down to 26–64 ms on a hatched DWG |
 | 2026-10-10 | major | First hardware parity doc: GPU backends per platform, input devices, displays, plotters |

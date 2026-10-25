@@ -238,6 +238,8 @@ mod tests {
         ui.ribbon.cycle_position = 1;
         ui.ribbon.contextual_tabs = false;
         ui.ribbon.window.floating = true;
+        ui.ribbon.window.auto_hide = true;
+        ui.ribbon.window.allow_docking = false;
         ui.ribbon.window.desktop_position = Some([4200.0, 300.0]);
         ui.ribbon.window.size = [720.0, 260.0];
         ui.ribbon.floating_panels = serde_json::from_value(

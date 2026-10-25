@@ -208,3 +208,61 @@ restore the top strip. CADCraft uses horizontal text tabs in the vertical palett
 icons and its existing tool catalog, not Autodesk assets or an exact skin. Native side
 palettes, additional contexts and user-authored layouts remain gaps. This is a focused
 floating-ribbon improvement, not a full parity claim.
+
+## Whole-ribbon anchoring and roll-up (2026-10-25)
+
+Live AutoCAD 2027 Computer Use confirmed Anchor Left and Anchor Right produce a
+full-height edge rail, enable Auto-hide, and expand on pointer hover. Moving away
+collapses the overlay. Dragging an anchored ribbon away leaves a floating ribbon
+with Auto-hide retained; floating auto-hide also rolls up away from app edges.
+Turning Auto-hide off and dragging the floating grip to the application top restores
+the horizontal ribbon. The reference was returned to its top-docked Home ribbon;
+no drawing was saved and no Autodesk screenshots/assets are included.
+
+| ID | Trigger and resulting behavior | Main files | Validation |
+|---|---|---|---|
+| CC-032 | Whole ribbon had no edge anchors. Shared options add Anchor Left/Right, checked Auto-hide, Keep Open and Allow Docking. Anchoring reserves a narrow rail; hover opens an overlay, leaving rolls up after a delay, pinning keeps it docked open, and Undock returns to a desktop window. The overlay blocks drawing/dock input. Save placement choices with legacy defaults and atomic validation. | `ribbon{.rs,/window.rs,/window/behavior.rs}`, `docking.rs`, `apps/cadcraft/src/workspace.rs`, ribbon/native tests | 52 focused ribbon/native/palette tests passed; Windows live checks and full-suite results below. |
+| CC-033 | Floating whole ribbon could not roll up. Collapse to a narrow vertical caption strip, hover to expand, protect menus/keyboard/drag activity, preserve expanded size and desktop geometry independently, and support grip drag/double-click dock while collapsed. | `ribbon/window{.rs,/behavior.rs}`, `ribbon/floating/native.rs`, tests | 52 focused ribbon/native/palette tests passed; Windows live checks and full-suite results below. |
+| CC-034 | Native whole-ribbon movement had no docking targets. Detect observed user moves separately from requested placement, preview app-edge targets, and dock/anchor after movement settles. Allow Docking and Ctrl suppress automatic docking. Keep monitor placement recovery independent of docking. Add Ukrainian strings, source-string scanning, protocol and parity records for CC-032–034. | ribbon window/native modules, `i18n/{tests.rs,uk.tsv}`, protocol/UI/hardware docs, tests | 52 focused ribbon/native/palette tests passed; Windows live checks and full-suite results below. |
+
+CC-032–034 regression details: a Windows Undock check exposed a reentrant egui
+context read while converting an anchored grip position to desktop pixels. Read the
+scale before entering the input closure; cover Undock with native root coordinates
+in the interaction harness. Pin controls also need the body background hit region to
+start below the anchor header. Context-menu activity holds the overlay open; pin
+clicks cannot supply points to a running drawing command. Treat native roll-up
+transitions as requested placement so decoration/size changes do not count as user
+docking gestures. Embedded floating ribbons explicitly resize for roll-up while
+ordinary embedded windows retain their previous minimum size.
+
+Windows on-screen validation used the clean Bracket sample in an isolated profile.
+Computer Use confirmed left/right rail hover, Keep Open, the placement shortcut menu,
+anchored Undock, floating strip hover/roll-up on the second monitor, native caption
+drag previews and top/left/right snapping. A caption drag remained floating with
+Allow Docking disabled, then anchored after re-enabling it. Control inspection
+confirmed saved anchor/autoHide and independent [360,520] expanded size at physical
+[4200,250], even while the native strip was only 48 physical pixels wide at 150%.
+Clean quit/restart restored both an anchored layout and the second-monitor floating
+roll-up layout. Every old test process was closed before the next launch; the
+original drawing was never opened or edited by these checks. The final test build
+is left with its normal top ribbon and a clean sample drawing.
+
+Limits: docking follows 300 ms of stable observed native movement; exact native
+OS drag-cancel/lock behavior and continuous pointer capture from an anchored grip
+into a new OS window are not implemented. The Undock gesture creates the floating
+window at the gesture position, where its native caption/grip continues movement.
+Ctrl bypass has native callback regression coverage, rather than a held-key desktop
+check. Anchored hover/roll-up has interaction coverage; browser device checks remain open, and automatic edge
+snapping currently applies to native floating windows. Other native platforms and
+physical mixed-DPI layouts were not device-tested. This is a focused behavior match,
+not a complete AutoCAD skin or full ribbon parity claim.
+
+Final automated validation (Windows, 2026-10-25): all six `cargo xtask ci` gates
+passed (fmt, Clippy, tests, assets, layering, wasm), with 2,319 tests passed, zero
+failed and zero ignored. The focused ribbon/native/palette run passed all 52 cases.
+The catalog checks validate the empty context column and all four new Ukrainian
+labels; the workspace round-trip includes autoHide and allowDocking. Wasm emitted
+only the same three existing dead-code warnings in canvas rebuild code.
+The final `cargo build --workspace --bins --locked -j4` also passed. Its copied
+Windows executable was reopened only after the older test instance exited; launch,
+top-docked ribbon and clean sample state were checked in Computer Use/control.

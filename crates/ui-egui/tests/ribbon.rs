@@ -657,3 +657,117 @@ fn wide_floating_ribbon_preserves_minimized_tab_flyouts_and_command_dispatch() {
     assert!(h.state().ui.ribbon.minimized);
     assert!(h.state().ui.ribbon.window.floating);
 }
+
+#[test]
+fn ribbon_anchors_validate_atomically_and_preserve_floating_geometry() {
+    let mut app = CadApp::new(Session::default(), Services::default());
+    app.run("ui.ribbon.window", json!({"floating":true,"desktopPosition":[4200,250],"size":[360,520]})).unwrap();
+    app.run("ui.ribbon.window", json!({"anchor":"left"})).unwrap();
+    assert!(!app.ui.ribbon.window.floating);
+    assert!(app.ui.ribbon.window.auto_hide);
+    let saved = app.ui.ribbon.clone();
+    for invalid in [
+        json!({"anchor":"bottom"}),
+        json!({"anchor":"left","floating":true}),
+        json!({"autoHide":"yes"}),
+        json!({"allowDocking":2}),
+        json!({"anchor":"right","size":[2,2]}),
+    ] {
+        assert!(app.run("ui.ribbon.window", invalid).is_err());
+        assert_eq!(app.ui.ribbon, saved);
+    }
+    let restored: ribbon::State = serde_json::from_value(serde_json::to_value(&saved).unwrap()).unwrap();
+    assert_eq!(restored, saved);
+    app.run("ui.ribbon.window", json!({"floating":true})).unwrap();
+    assert!(app.ui.ribbon.window.anchor.is_none());
+    assert_eq!(app.ui.ribbon.window.desktop_position, Some([4200.0, 250.0]));
+    assert_eq!(app.ui.ribbon.window.size, [360.0, 520.0]);
+    assert!(app.ui.ribbon.window.auto_hide);
+    let legacy: ribbon::State = serde_json::from_value(json!({"window":{"floating":true}})).unwrap();
+    assert!(legacy.window.allow_docking && !legacy.window.auto_hide && legacy.window.anchor.is_none());
+}
+
+#[test]
+fn whole_ribbon_anchors_hover_rollup_pin_and_switch_sides_without_drawing_changes() {
+    for side in ["left", "right"] {
+        let mut h = harness(1200.0);
+        h.state_mut().run("ui.ribbon.window", json!({"anchor":side})).unwrap();
+        let saved = h.state().ui.ribbon.clone();
+        let dirty = h.state().session.state().unwrap().is_dirty();
+        h.event(egui::Event::PointerMoved(egui::pos2(600.0, 550.0)));
+        h.run_steps(60);
+        assert!(h.query_by_label("Keep Open").is_none());
+        let rail = h.get_by_label("Ribbon Auto-hide").rect();
+        h.event(egui::Event::PointerMoved(rail.center()));
+        h.run_steps(6);
+        assert!(h.query_by_label("Keep Open").is_some(), "hover {side}");
+        assert_eq!(h.state().ui.ribbon, saved);
+        h.event(egui::Event::PointerMoved(egui::pos2(600.0, 550.0)));
+        h.run_steps(60);
+        assert!(h.query_by_label("Keep Open").is_none(), "rollup {side}");
+        h.event(egui::Event::PointerMoved(rail.center()));
+        h.run_steps(6);
+        h.get_by_label("Keep Open").click();
+        h.run_steps(6);
+        assert!(!h.state().ui.ribbon.window.auto_hide, "pin {side}");
+        assert_eq!(h.state().session.state().unwrap().is_dirty(), dirty);
+    }
+}
+
+#[test]
+fn anchored_ribbon_menu_prevents_rollup_until_dismissed() {
+    let mut h = harness(1200.0);
+    h.state_mut().run("ui.ribbon.window", json!({"anchor":"left"})).unwrap();
+    h.run_steps(60);
+    let rail = h.get_by_label("Ribbon Auto-hide").rect();
+    h.event(egui::Event::PointerMoved(rail.center()));
+    h.run_steps(6);
+    h.get_by_label("Ribbon Options").click();
+    h.run_steps(5);
+    h.event(egui::Event::PointerMoved(egui::pos2(800.0, 550.0)));
+    h.run_steps(60);
+    assert!(h.query_by_label("Keep Open").is_some());
+    assert!(h.query_by_label("Anchor Right").is_some());
+    h.key_press(Key::Escape);
+    h.run_steps(60);
+    assert!(h.query_by_label("Keep Open").is_none());
+}
+
+#[test]
+fn anchored_overlay_pin_does_not_pass_a_click_into_a_running_drawing_command() {
+    let mut app = CadApp::new(Session::default(), Services::default());
+    app.run("new", json!({})).unwrap();
+    app.run("ribbon", json!({})).unwrap();
+    app.run("ui.ribbon.window", json!({"anchor":"left"})).unwrap();
+    let dirty = app.session.state().unwrap().is_dirty();
+    let mut h = Harness::builder().with_size(vec2(1600.0, 900.0)).build_ui_state(
+        |ui, app: &mut CadApp| {
+            app.logic(ui.ctx());
+            app.ui(ui);
+        },
+        app,
+    );
+    h.run_steps(60);
+    h.state_mut().start("line");
+    let rail = h.get_by_label("Ribbon Auto-hide").rect();
+    h.event(egui::Event::PointerMoved(rail.center()));
+    h.run_steps(6);
+    h.get_by_label("Keep Open").click();
+    h.run_steps(5);
+    assert!(h.state().session.prompt_text().starts_with("LINE Specify first point"));
+    assert_eq!(h.state().session.state().unwrap().is_dirty(), dirty);
+}
+
+#[test]
+fn anchored_undock_uses_native_root_geometry_without_reentering_context_lock() {
+    let mut h = harness(1200.0);
+    h.input_mut().viewports.get_mut(&egui::ViewportId::ROOT).unwrap().inner_rect =
+        Some(egui::Rect::from_min_size(egui::pos2(100.0, 100.0), vec2(1200.0, 600.0)));
+    h.state_mut().run("ui.ribbon.window", json!({"anchor":"right","autoHide":false})).unwrap();
+    h.run_steps(6);
+    h.get_by_label("Undock Ribbon").click();
+    h.run_steps(5);
+    assert!(h.state().ui.ribbon.window.floating);
+    assert!(h.state().ui.ribbon.window.anchor.is_none());
+    assert!(h.state().ui.ribbon.window.desktop_position.is_some());
+}

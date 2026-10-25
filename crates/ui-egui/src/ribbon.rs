@@ -12,6 +12,7 @@ pub mod context;
 mod floating;
 mod window;
 pub use floating::{Display as NativeDisplay, inspect as inspect_native_windows, sync_desktop as sync_native_desktop};
+pub(crate) use window::blockers as anchor_blockers;
 
 type Tool = (Icon, &'static str, &'static str);
 
@@ -451,6 +452,7 @@ fn bool_param(p: &Value, key: &str, default: bool) -> Result<bool, String> {
 
 /// Shared recovery controls remain accessible from Panels even when the entire ribbon is hidden.
 pub(crate) fn customize(app: &mut CadApp, ui: &mut egui::Ui) {
+    window::options(app, ui);
     if ui.button(if app.ui.ribbon.window.floating { crate::tl!("Dock Ribbon") } else { crate::tl!("Undock Ribbon") }).clicked() {
         let _ = app.run("ui.ribbon.window", json!({"floating":!app.ui.ribbon.window.floating}));
         ui.close();
@@ -644,6 +646,7 @@ fn panel_menu(app: &mut CadApp, ui: &mut egui::Ui, tab_id: &str, panel: &Panel) 
 }
 
 pub fn show(app: &mut CadApp, ui: &mut egui::Ui) {
+    window::clear(ui.ctx());
     if !app.ui.show_ribbon {
         floating::clear(ui.ctx());
         return;
@@ -653,6 +656,13 @@ pub fn show(app: &mut CadApp, ui: &mut egui::Ui) {
     }
     context::sync(app);
     floating::clear(ui.ctx());
+    if app.ui.ribbon.window.anchor.is_some() {
+        let mut clicked = None;
+        window::anchored(app, ui, &mut clicked);
+        floating::show(app, ui.ctx(), &mut clicked);
+        dispatch(app, ui.ctx(), clicked);
+        return;
+    }
     if app.ui.ribbon.window.floating {
         let mut clicked = None;
         window::show(app, ui.ctx(), &mut clicked);

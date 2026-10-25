@@ -26,6 +26,7 @@ struct Placement {
     target: Pos2,
     size: Option<[f32; 2]>,
     size_deadline: Option<f64>,
+    rolled: bool,
 }
 
 fn desktop_id() -> egui::Id {
@@ -96,6 +97,7 @@ pub(super) fn show(
         offset: f.position,
         size: [204.0, 154.0],
         resizable: false,
+        rolled: false,
     };
     let geometry = show_window(app, ctx, spec, clicked, |app, ui, clicked| body(app, ui, tab, panel, clicked));
     if geometry.closed {
@@ -115,6 +117,7 @@ pub(in crate::ribbon) struct WindowSpec {
     pub offset: [f32; 2],
     pub size: [f32; 2],
     pub resizable: bool,
+    pub rolled: bool,
 }
 
 #[derive(Default)]
@@ -122,6 +125,8 @@ pub(in crate::ribbon) struct Geometry {
     pub closed: bool,
     pub position: Option<[f32; 2]>,
     pub size: Option<[f32; 2]>,
+    pub user_moved: bool,
+    pub ctrl: bool,
 }
 
 pub(in crate::ribbon) fn show_window(
@@ -142,7 +147,14 @@ pub(in crate::ribbon) fn show_window(
     let builder = ViewportBuilder::default()
         .with_title(spec.title)
         .with_inner_size(spec.size)
-        .with_min_inner_size(if spec.resizable { [300.0, 220.0] } else { spec.size })
+        .with_min_inner_size(if spec.rolled {
+            [32.0, 32.0]
+        } else if spec.resizable {
+            [300.0, 220.0]
+        } else {
+            spec.size
+        })
+        .with_decorations(!spec.rolled)
         .with_minimize_button(false)
         .with_maximize_button(false)
         .with_resizable(spec.resizable)
@@ -167,7 +179,8 @@ pub(in crate::ribbon) fn show_window(
         crate::cmdline::keyboard(app, &child);
         let scale = child.pixels_per_point();
         let now = child.input(|i| i.time);
-        if !placement.initialized || placement.saved != spec.saved || placement.displays != desktop.displays {
+        geometry.ctrl = child.input(|i| i.modifiers.ctrl);
+        if !placement.initialized || placement.saved != spec.saved || placement.displays != desktop.displays || placement.rolled != spec.rolled {
             let requested = spec.saved.map_or(root + vec2(spec.offset[0], spec.offset[1]) * root_scale, |p| Pos2::new(p[0], p[1]));
             let target = recover_size(requested, &desktop.displays, root, child.zoom_factor(), vec2(spec.size[0] + 16.0, spec.size[1] + 46.0));
             placement = Placement {
@@ -176,10 +189,12 @@ pub(in crate::ribbon) fn show_window(
                 displays: desktop.displays.clone(),
                 position_deadline: Some(now + 1.0),
                 target,
+                rolled: spec.rolled,
                 ..Default::default()
             };
         }
         let observed = child.input(|i| i.viewport().outer_rect);
+        let positioning = placement.position_deadline.is_some();
         if placement.position_deadline.is_some() {
             if observed.is_some_and(|r| (r.min * scale).distance(placement.target) <= 1.0)
                 || placement.position_deadline.is_some_and(|deadline| now >= deadline)
@@ -197,6 +212,7 @@ pub(in crate::ribbon) fn show_window(
             let position = [pos.x, pos.y];
             if spec.saved != Some(position) {
                 geometry.position = Some(position);
+                geometry.user_moved = !positioning;
                 placement.saved = Some(position);
             }
         }

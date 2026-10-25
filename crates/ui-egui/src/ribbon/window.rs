@@ -1,6 +1,9 @@
 //! Whole-ribbon palette, independent of detached individual panels.
 use super::*;
 use floating::native;
+mod behavior;
+pub(crate) use behavior::blockers;
+pub(super) use behavior::{anchored, clear, options};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -8,17 +11,21 @@ pub struct State {
     pub floating: bool,
     pub desktop_position: Option<[f32; 2]>,
     pub size: [f32; 2],
+    pub anchor: Option<behavior::Edge>,
+    pub auto_hide: bool,
+    pub allow_docking: bool,
 }
 
 impl Default for State {
     fn default() -> Self {
-        Self { floating: false, desktop_position: None, size: [360.0, 520.0] }
+        Self { floating: false, desktop_position: None, size: [360.0, 520.0], anchor: None, auto_hide: false, allow_docking: true }
     }
 }
 
 impl State {
     pub(super) fn valid(&self) -> bool {
-        self.desktop_position.is_none_or(|p| p.iter().all(|v| v.is_finite() && v.abs() <= 1_000_000.0))
+        !(self.floating && self.anchor.is_some())
+            && self.desktop_position.is_none_or(|p| p.iter().all(|v| v.is_finite() && v.abs() <= 1_000_000.0))
             && self.size.iter().all(|v| v.is_finite() && (220.0..=8192.0).contains(v))
             && self.size[0] >= 300.0
     }
@@ -27,6 +34,25 @@ impl State {
 pub(super) fn configure(app: &mut CadApp, p: &Value) -> Result<Value, String> {
     let mut next = app.ui.ribbon.clone();
     next.window.floating = bool_param(p, "floating", next.window.floating)?;
+    next.window.auto_hide = bool_param(p, "autoHide", next.window.auto_hide)?;
+    next.window.allow_docking = bool_param(p, "allowDocking", next.window.allow_docking)?;
+    if let Some(v) = p.get("anchor") {
+        next.window.anchor = serde_json::from_value(v.clone()).map_err(|_| "Invalid ribbon anchor")?;
+        if next.window.anchor.is_some() {
+            if p.get("floating").and_then(Value::as_bool) == Some(true) {
+                return Err("Floating ribbon cannot be anchored".into());
+            }
+            next.window.floating = false;
+            if p.get("autoHide").is_none() {
+                next.window.auto_hide = true;
+            }
+        }
+    } else if p.get("floating").is_some() {
+        next.window.anchor = None;
+    }
+    if next.window.floating && next.window.anchor.is_some() {
+        return Err("Floating ribbon cannot be anchored".into());
+    }
     if let Some(v) = p.get("desktopPosition") {
         next.window.desktop_position =
             if v.is_null() { None } else { Some(serde_json::from_value(v.clone()).map_err(|_| "Invalid ribbon position")?) };
@@ -41,16 +67,20 @@ pub(super) fn configure(app: &mut CadApp, p: &Value) -> Result<Value, String> {
 
 pub(super) fn show(app: &mut CadApp, ctx: &egui::Context, clicked: &mut Option<&'static str>) {
     let state = app.ui.ribbon.window.clone();
+    let rolled = behavior::rolled(ctx, state.auto_hide);
     if ctx.embed_viewports() {
         let mut open = true;
-        egui::Window::new(crate::tl!("Ribbon"))
+        let mut window = egui::Window::new(crate::tl!("Ribbon"))
             .id(egui::Id::new("whole_ribbon"))
             .default_pos([80.0, 180.0])
-            .default_size(state.size)
-            .min_size([300.0, 220.0])
+            .default_size(if rolled { [32.0, state.size[1]] } else { state.size })
+            .min_size(if state.auto_hide { [32.0, 32.0] } else { [300.0, 220.0] })
             .open(&mut open)
-            .collapsible(false)
-            .show(ctx, |ui| body(app, ui, clicked));
+            .collapsible(false);
+        if state.auto_hide {
+            window = window.fixed_size(if rolled { [32.0, state.size[1]] } else { state.size });
+        }
+        window.show(ctx, |ui| behavior::floating_body(app, ui, clicked, rolled));
         if !open {
             let _ = app.run("ribbonclose", json!({}));
         }
@@ -65,11 +95,12 @@ pub(super) fn show(app: &mut CadApp, ctx: &egui::Context, clicked: &mut Option<&
             title: format!("CADCraft — {}", crate::tl!("Ribbon")),
             saved: state.desktop_position,
             offset: [80.0, 180.0],
-            size: state.size,
+            size: if rolled { [32.0, state.size[1]] } else { state.size },
             resizable: true,
+            rolled,
         },
         clicked,
-        body,
+        |app, ui, clicked| behavior::floating_body(app, ui, clicked, rolled),
     );
     native::remember_windows(ctx, vec![id]);
     if geometry.closed {
@@ -79,15 +110,19 @@ pub(super) fn show(app: &mut CadApp, ctx: &egui::Context, clicked: &mut Option<&
             "ui.ribbon.window",
             json!({
                 "desktopPosition":geometry.position.or(state.desktop_position),
-                "size":geometry.size.unwrap_or(state.size),
+                "size":if rolled {state.size} else {geometry.size.unwrap_or(state.size)},
             }),
         );
+        behavior::edge_docking(app, ctx, &geometry);
     }
 }
 
 fn body(app: &mut CadApp, ui: &mut egui::Ui, clicked: &mut Option<&'static str>) {
-    let background = ui.interact(ui.max_rect(), ui.id().with("whole_ribbon_context"), Sense::click());
+    let background = ui.interact(ui.available_rect_before_wrap(), ui.id().with("whole_ribbon_context"), Sense::click());
     ui.horizontal(|ui| {
+        if app.ui.ribbon.window.floating && app.ui.ribbon.window.auto_hide && ui.small_button(crate::tl!("Keep Open")).clicked() {
+            let _ = app.run("ui.ribbon.window", json!({"autoHide":false}));
+        }
         let grip = ui.add(egui::Label::new(crate::tl!("Ribbon")).sense(Sense::click_and_drag()));
         grip.clone().on_hover_text(crate::tl!("Double-click to dock ribbon"));
         if grip.double_clicked() {
@@ -131,7 +166,7 @@ fn body(app: &mut CadApp, ui: &mut egui::Ui, clicked: &mut Option<&'static str>)
 }
 
 fn dock(app: &mut CadApp, ctx: &egui::Context) {
-    let _ = app.run("ui.ribbon.window", json!({"floating":false}));
+    let _ = app.run("ui.ribbon.window", json!({"floating":false,"anchor":null,"autoHide":false}));
     ctx.send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::Focus);
     ctx.request_repaint_of(egui::ViewportId::ROOT);
 }

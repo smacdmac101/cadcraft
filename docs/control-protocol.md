@@ -203,7 +203,7 @@ as the examples above. They change the saved UI workspace and do not edit drawin
 | `ui.ribbon.panel` | `{tab?: active tab, panel, visible?: bool}` | Show/hide a panel within that tab; omitted `visible` toggles it. |
 | `ui.ribbon.options` | `{minimized?: bool, titles?: bool, minimizeMode?: "tabs"\|"panelTitles"\|"panelButtons"\|"cycle", contextualTabs?: bool}` | Configure panel expansion, compact presentation and title visibility. |
 | `ui.ribbon.cycle` | `{}` | Toggle the chosen minimize mode, or cycle Full → Panel Buttons → Panel Titles → Tabs → Full when `cycle` is selected. |
-| `ui.ribbon.window` | `{floating?: bool, desktopPosition?: [x,y]\|null, size?: [width,height]}` | Undock/dock the whole ribbon independently of detached panels; native outer position is physical desktop pixels, client size is logical points (minimum 300×220, maximum 8192 per axis). Invalid changes are atomic. |
+| `ui.ribbon.window` | `{floating?: bool, anchor?: "left"\|"right"\|null, autoHide?: bool, allowDocking?: bool, desktopPosition?: [x,y]\|null, size?: [width,height]}` | Undock/dock the whole ribbon independently of detached panels; native outer position is physical desktop pixels, client size is logical points (minimum 300×220, maximum 8192 per axis). Invalid changes are atomic. |
 | `ui.ribbon.float` | `{tab?: effective active tab, panel, position?: [x,y], desktopPosition?: [x,y]\|null}` | Detach or move a unique panel; `position` is the embedded/root-relative anchor and `desktopPosition` is the native outer position in physical desktop pixels. Finite bounded positions only. |
 | `ui.ribbon.return` | `{tab?: effective active tab, panel}` or `{all:true}` | Return one or all detached panels to their original ribbon positions. |
 | `ui.ribbon.reset` | `{}` | Show and restore the default drafting ribbon; Modeling remains available through Show Tabs or moving the Modeling tool set. |
@@ -293,3 +293,10 @@ returns that panel to its source tab. `ribbon.window` persists floating state, p
 desktop position and logical client size; defaults preserve old docked workspaces.
 Native focus in `ribbonWindows.windows` describes each OS window; the existing focused
 widget field and synthetic input methods remain rooted in the main viewport.
+
+Whole-ribbon placement options: anchor left/right selects an app edge, leaves floating mode
+and defaults autoHide to true unless explicitly provided. Passing floating clears the anchor;
+explicit floating=true with a non-null anchor is invalid. autoHide and allowDocking persist;
+old workspaces default to false and true respectively. Expanded size remains independent of
+the collapsed strip. Disabling Allow Docking or holding Ctrl suppresses native movement docking. Anchored
+hover expansion reserves only the narrow rail; Keep Open pins the full width.
