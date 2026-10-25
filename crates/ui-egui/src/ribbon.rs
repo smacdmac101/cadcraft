@@ -394,10 +394,11 @@ fn configure(app: &mut CadApp, id: &str, p: &Value) -> Result<Value, String> {
         "ui.ribbon.tab" => {
             let t = p.get("tab").and_then(Value::as_str).and_then(tab).ok_or("Unknown ribbon tab")?;
             if context::TABS.iter().any(|c| c.id == t.id) {
-                if p.get("visible").is_some() || context::available(app).is_none_or(|c| c.id != t.id) {
+                if p.get("visible").is_some() || !context::is_available(app, t.id) {
                     return Err("Contextual ribbon tab is unavailable".into());
                 }
                 app.ribbon_context.active = true;
+                app.ribbon_context.selected = Some(t.id);
                 return Ok(json!({"contextualTab": t.id}));
             }
             if p.get("visible").is_some() {
@@ -693,7 +694,7 @@ pub fn show(app: &mut CadApp, ui: &mut egui::Ui) {
             ui.horizontal(|ui| {
                 egui::ScrollArea::horizontal().id_salt("ribbon_tabs").max_width((ui.available_width() - 162.0).max(32.0)).show(ui, |ui| {
                     ui.horizontal(|ui| {
-                        for tab in TABS.iter().filter(|t| app.ui.ribbon.tab_visible(t.id)).chain(context::available(app)).collect::<Vec<_>>() {
+                        for tab in TABS.iter().filter(|t| app.ui.ribbon.tab_visible(t.id)).chain(context::available_tabs(app)).collect::<Vec<_>>() {
                             let active = context::active(app).is_some_and(|t| t.id == tab.id);
                             let contextual = context::TABS.iter().any(|t| t.id == tab.id);
                             let text = egui::RichText::new(crate::i18n::t(tab.label));

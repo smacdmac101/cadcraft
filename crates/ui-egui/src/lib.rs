@@ -81,6 +81,8 @@ pub struct UiState {
     pub ribbon: ribbon::State,
     /// Stable IDs of top toolbar groups hidden by the user.
     pub hidden_toolbar_groups: Vec<String>,
+    /// Visibility only; hiding a drafting control does not disable its setting.
+    pub hidden_status_items: Vec<String>,
     pub show_file_tabs: bool,
     pub show_status_bar: bool,
     pub show_command_line: bool,
@@ -170,6 +172,7 @@ impl Default for UiState {
             show_ribbon: false,
             ribbon: ribbon::State::default(),
             hidden_toolbar_groups: Vec::new(),
+            hidden_status_items: Vec::new(),
             show_file_tabs: true,
             show_status_bar: true,
             show_command_line: true,
@@ -641,6 +644,7 @@ impl CadApp {
     }
 
     fn draw(&mut self, ui: &mut egui::Ui) {
+        cmdline::dismiss_popup_on_escape(ui.ctx());
         let t0 = now_ms();
         control::begin_frame(ui.ctx());
         let t = theme::Tokens::get();

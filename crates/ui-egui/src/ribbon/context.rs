@@ -4,6 +4,30 @@ use cadcraft_engine::doc::EntityKind;
 
 pub const TABS: &[Tab] = &[
     Tab {
+        id: "layout",
+        label: "Layout",
+        panels: &[
+            panel("layout", "Layout", &[(Icon::New, "layout.new", "New Layout"), (Icon::PageSetup, "pagesetup", "Page Setup Manager")], None),
+            panel(
+                "viewports",
+                "Layout Viewports",
+                &[
+                    (Icon::Rectangle, "mview", "Viewports"),
+                    (Icon::Polygon, "mview.polygonal", "Polygonal Viewport"),
+                    (Icon::Trim, "vpclip", "Clip Viewport"),
+                ],
+                None,
+            ),
+            panel("space", "Space", &[(Icon::ZoomWindow, "mspace", "Model Space (in viewport)"), (Icon::PageSetup, "pspace", "Paper Space")], None),
+            panel(
+                "plot",
+                "Plot",
+                &[(Icon::Plot, "plot", "Print"), (Icon::Preview, "preview", "Plot Preview"), (Icon::Publish, "publish", "Batch Publish")],
+                None,
+            ),
+        ],
+    },
+    Tab {
         id: "hatchEditor",
         label: "Hatch Editor",
         panels: &[panel(
@@ -51,6 +75,7 @@ pub const TABS: &[Tab] = &[
 pub struct Runtime {
     key: Option<(u64, &'static str)>,
     pub active: bool,
+    pub selected: Option<&'static str>,
 }
 
 pub fn available(app: &CadApp) -> Option<&'static Tab> {
@@ -58,9 +83,7 @@ pub fn available(app: &CadApp) -> Option<&'static Tab> {
         return None;
     }
     let state = app.session.state().ok()?;
-    let id = if state.block_edit.is_some() {
-        "blockEditor"
-    } else {
+    let selection_tab = || {
         let selection = app.session.selection();
         let first = state.doc.entity(*selection.first()?)?;
         let id = match first.kind {
@@ -68,16 +91,38 @@ pub fn available(app: &CadApp) -> Option<&'static Tab> {
             EntityKind::Table(_) => "tableEditor",
             _ => return None,
         };
-        if !selection.iter().all(|h| {
-            state.doc.entity(*h).is_some_and(|e| {
-                matches!((&first.kind, &e.kind), (EntityKind::Hatch(_), EntityKind::Hatch(_)) | (EntityKind::Table(_), EntityKind::Table(_)))
+        selection
+            .iter()
+            .all(|h| {
+                state.doc.entity(*h).is_some_and(|e| {
+                    matches!((&first.kind, &e.kind), (EntityKind::Hatch(_), EntityKind::Hatch(_)) | (EntityKind::Table(_), EntityKind::Table(_)))
+                })
             })
-        }) {
-            return None;
-        }
+            .then_some(id)
+    };
+    let id = if state.block_edit.is_some() {
+        "blockEditor"
+    } else if let Some(id) = selection_tab() {
         id
+    } else if matches!(app.session.layout_space(), cadcraft_doc::Space::Paper(_)) {
+        "layout"
+    } else {
+        return None;
     };
     TABS.iter().find(|t| t.id == id)
+}
+
+pub fn available_tabs(app: &CadApp) -> impl Iterator<Item = &'static Tab> {
+    let primary = available(app);
+    let layout = (primary.is_some_and(|t| t.id != "layout" && t.id != "blockEditor")
+        && matches!(app.session.layout_space(), cadcraft_doc::Space::Paper(_)))
+    .then(|| TABS.iter().find(|t| t.id == "layout"))
+    .flatten();
+    primary.into_iter().chain(layout)
+}
+
+pub fn is_available(app: &CadApp, id: &str) -> bool {
+    available_tabs(app).any(|t| t.id == id)
 }
 
 pub fn sync(app: &mut CadApp) {
@@ -85,9 +130,14 @@ pub fn sync(app: &mut CadApp) {
     if key != app.ribbon_context.key {
         app.ribbon_context.active = key.is_some();
         app.ribbon_context.key = key;
+        app.ribbon_context.selected = None;
     }
 }
 
 pub fn active(app: &CadApp) -> Option<&'static Tab> {
-    if app.ribbon_context.active { available(app).or_else(|| app.ui.ribbon.active()) } else { app.ui.ribbon.active() }
+    if app.ribbon_context.active {
+        available_tabs(app).find(|t| Some(t.id) == app.ribbon_context.selected).or_else(|| available(app)).or_else(|| app.ui.ribbon.active())
+    } else {
+        app.ui.ribbon.active()
+    }
 }

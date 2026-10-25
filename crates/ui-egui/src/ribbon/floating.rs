@@ -64,7 +64,7 @@ pub(super) fn show(app: &mut CadApp, ctx: &egui::Context, clicked: &mut Option<&
         if !app.ui.ribbon.panel_visible(tab.id, panel.id) {
             continue;
         }
-        if context::TABS.iter().any(|t| t.id == tab.id) && context::available(app).is_none_or(|t| t.id != tab.id) {
+        if context::TABS.iter().any(|t| t.id == tab.id) && !context::is_available(app, tab.id) {
             continue;
         }
         if !ctx.embed_viewports() {

@@ -4,6 +4,7 @@ use serde_json::json;
 
 pub(crate) fn show(app: &mut CadApp, ui: &mut egui::Ui) {
     ui.menu_button(crate::tl!("Ribbon Options"), |ui| crate::ribbon::customize(app, ui));
+    ui.menu_button(crate::tl!("Status Bar Customization"), |ui| crate::chrome::status::menu(app, ui));
     ui.separator();
     ui.label(crate::tl!("Tool Groups"));
     for (id, label) in crate::chrome::TOOLBAR_GROUPS {

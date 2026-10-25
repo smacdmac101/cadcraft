@@ -300,3 +300,16 @@ explicit floating=true with a non-null anchor is invalid. autoHide and allowDock
 old workspaces default to false and true respectively. Expanded size remains independent of
 the collapsed strip. Disabling Allow Docking or holding Ctrl suppresses native movement docking. Anchored
 hover expansion reserves only the narrow rail; Keep Open pins the full width.
+
+`ui.status.item {item, visible?: bool}` changes only a status item's visibility; omitting
+visible toggles it. `ui.status.reset {}` restores all status items. IDs: coordinates,
+paperSpace, annotationScale, viewportScale, grid, snap, ortho, polar, isodraft, otrack,
+osnap, lwdisplay, transparencydisplay, dynmode, qpmode, annotationVisibility, workspace,
+draftingSettings. Unknown IDs or non-boolean visibility are rejected atomically.
+`ui.hiddenStatusItems` is persisted in the native workspace; old workspaces show all.
+The customization button and Panels entry remain available for recovery.
+
+Contextual ribbon tab `layout` is available in a paper layout, including when MSPACE is
+active inside a viewport. Layout can coexist with Hatch/Table contexts. Selecting it
+through `ui.ribbon.tab` changes transient context choice, not saved `activeTab`; it is
+unavailable in Model, Start, Block Editor, or with contextual tabs disabled.

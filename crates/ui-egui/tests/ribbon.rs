@@ -771,3 +771,62 @@ fn anchored_undock_uses_native_root_geometry_without_reentering_context_lock() {
     assert!(h.state().ui.ribbon.window.anchor.is_none());
     assert!(h.state().ui.ribbon.window.desktop_position.is_some());
 }
+
+#[test]
+fn layout_context_tracks_paper_tabs_preserves_regular_choice_and_dispatches_viewports() {
+    let mut h = harness(1600.0);
+    h.state_mut().run("ui.ribbon.tab", json!({"tab":"insert"})).unwrap();
+    let result = h.state_mut().run("layout.new", json!({"name":"Sheet","viewport":false})).unwrap();
+    assert_eq!(result["name"], "Sheet");
+    h.state_mut().run("layout.set", json!({"name":"Sheet"})).unwrap();
+    h.run_steps(6);
+    assert!(h.query_by_label("Ribbon Tab: Layout").is_some());
+    assert_eq!(ribbon::context::active(h.state()).unwrap().id, "layout");
+    assert_eq!(h.state().ui.ribbon.active_tab, "insert");
+    h.get_by_label("Ribbon / Layout Viewports: Viewports").click();
+    h.run_steps(4);
+    assert!(h.state().session.prompt_text().to_ascii_uppercase().starts_with("MVIEW"));
+    h.key_press(Key::Escape);
+    h.run_steps(3);
+    h.get_by_label("Ribbon Tab: Home").click();
+    h.run_steps(3);
+    assert_eq!(ribbon::context::active(h.state()).unwrap().id, "home");
+    h.get_by_label("Ribbon Tab: Layout").click();
+    h.run_steps(3);
+    h.state_mut().run("layout.set", json!({"name":"Model"})).unwrap();
+    h.run_steps(4);
+    assert!(h.query_by_label("Ribbon Tab: Layout").is_none());
+    assert_eq!(h.state().ui.ribbon.active_tab, "home");
+    assert!(h.state_mut().run("ui.ribbon.tab", json!({"tab":"layout"})).is_err());
+}
+
+#[test]
+fn paper_layout_remains_available_alongside_selection_context_and_in_floating_ribbon() {
+    let mut h = harness(1600.0);
+    h.state_mut().run("layout.new", json!({"name":"Sheet","viewport":false})).unwrap();
+    h.state_mut().run("layout.set", json!({"name":"Sheet"})).unwrap();
+    h.run_steps(4);
+    h.state_mut().run("mview", json!({"p1":[0,0],"p2":[100,80]})).unwrap();
+    h.state_mut().run("mspace", json!({})).unwrap();
+    h.run_steps(4);
+    assert!(ribbon::context::is_available(h.state(), "layout"));
+    h.state_mut().run("pspace", json!({})).unwrap();
+    h.run_steps(3);
+    select_context_entity(&mut h, "table");
+    assert_eq!(ribbon::context::available(h.state()).unwrap().id, "tableEditor");
+    assert!(ribbon::context::is_available(h.state(), "layout"));
+    h.get_by_label("Ribbon Tab: Layout").click();
+    h.run_steps(4);
+    assert_eq!(ribbon::context::active(h.state()).unwrap().id, "layout");
+    h.state_mut().run("ui.ribbon.float", json!({"tab":"layout","panel":"viewports"})).unwrap();
+    h.run_steps(4);
+    assert!(h.query_by_label("Return to Ribbon").is_some());
+    h.state_mut().run("ui.ribbon.window", json!({"floating":true,"size":[1000,300]})).unwrap();
+    h.run_steps(5);
+    assert!(h.query_by_label("Layout").is_some());
+    assert!(h.query_by_label("Return to Ribbon").is_some());
+    h.state_mut().run("ui.ribbon.options", json!({"contextualTabs":false})).unwrap();
+    h.run_steps(5);
+    assert!(!ribbon::context::is_available(h.state(), "layout"));
+    assert!(h.query_by_label("Return to Ribbon").is_none());
+}

@@ -31,6 +31,8 @@ pub const UI_COMMANDS: &[(&str, &str, &[&str], Option<&str>)] = &[
     ("ui.ribbon.cycle", "Cycle Ribbon Display", &[], None),
     ("ui.toolbar.group", "Show or Hide Tool Group", &[], None),
     ("ui.toolbar.reset", "Show All Tool Groups", &[], None),
+    ("ui.status.item", "Status Bar Item", &[], None),
+    ("ui.status.reset", "Show All Status Items", &[], None),
     ("ui.spacemouse", "3D Mouse...", &["Tools", "3D Mouse..."], None),
     ("ui.spacemouse.calibrate", "Calibrate 3D Mouse", &[], None),
     ("ui.spacemouse.navigate", "3D Mouse Navigation", &[], None),
@@ -100,6 +102,9 @@ pub fn run_ui_command(app: &mut CadApp, id: &str, params: &Value) -> Option<Resu
 
 fn run_ui_command_inner(app: &mut CadApp, id: &str, params: &Value) -> Option<Result<Value, String>> {
     if let Some(result) = crate::ribbon::route(app, id, params) {
+        return Some(result);
+    }
+    if let Some(result) = crate::chrome::status::route(app, id, params) {
         return Some(result);
     }
     if id == "ui.toolbar.reset" {

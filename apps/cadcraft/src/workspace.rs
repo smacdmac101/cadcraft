@@ -34,6 +34,7 @@ fn config_dir_from(platform: &str, get: impl Fn(&str) -> Option<OsString>) -> Op
 fn snapshot(ui: &UiState) -> Result<Value, String> {
     ui.docking.validate()?;
     ui.ribbon.validate()?;
+    cadcraft_ui_egui::chrome::status::validate(&ui.hidden_status_items)?;
     if !matches!(ui.toolset_tab.as_str(), "Drafting" | "Modeling") {
         return Err("toolsetTab must be Drafting or Modeling".into());
     }
@@ -57,6 +58,7 @@ fn snapshot(ui: &UiState) -> Result<Value, String> {
         "showRibbon": ui.show_ribbon,
         "ribbon": ui.ribbon,
         "hiddenToolbarGroups": ui.hidden_toolbar_groups,
+        "hiddenStatusItems": ui.hidden_status_items,
         "hiddenTools": ui.hidden_tools,
         "showFileTabs": ui.show_file_tabs,
         "showStatusBar": ui.show_status_bar,
@@ -225,6 +227,7 @@ mod tests {
             collapsed_groups: vec!["Solid".into()],
             hidden_toolbar_groups: vec!["plot".into(), "inquiry".into()],
             hidden_tools: vec!["line".into()],
+            hidden_status_items: vec!["grid".into(), "coordinates".into()],
             history_lines: 5,
             dialog: Some("layers".into()),
             start_tab: true,
@@ -258,6 +261,7 @@ mod tests {
         assert_eq!(restored.hidden_toolbar_groups, ["plot", "inquiry"]);
         assert_eq!(restored.ribbon, ui.ribbon);
         assert_eq!(restored.hidden_tools, ["line"]);
+        assert_eq!(restored.hidden_status_items, ["grid", "coordinates"]);
         assert!(restored.show_ribbon);
         assert_eq!(restored.docking.auto_hide, ui.docking.auto_hide);
         assert_eq!(snapshot(&restored).unwrap(), snapshot(&ui).unwrap());

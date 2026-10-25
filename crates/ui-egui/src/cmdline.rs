@@ -247,8 +247,22 @@ pub struct KeyPress {
     pub plain: bool,
 }
 
+/// Consume Escape before popup rendering closes its memory entry, so the canvas cannot
+/// also treat that same key as drawing-command input later in the frame.
+pub(crate) fn dismiss_popup_on_escape(ctx: &egui::Context) -> bool {
+    if egui::Popup::is_any_open(ctx) && ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, Key::Escape)) {
+        egui::Popup::close_all(ctx);
+        ctx.request_repaint();
+        return true;
+    }
+    false
+}
+
 /// Handle keyboard input destined for the command line (when no text field has focus).
 pub fn keyboard(app: &mut CadApp, ctx: &egui::Context) {
+    if dismiss_popup_on_escape(ctx) {
+        return;
+    }
     if ctx.egui_wants_keyboard_input() {
         return;
     }

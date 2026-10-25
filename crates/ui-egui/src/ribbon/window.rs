@@ -137,7 +137,7 @@ fn body(app: &mut CadApp, ui: &mut egui::Ui, clicked: &mut Option<&'static str>)
         ui.menu_button(crate::tl!("Ribbon Options"), |ui| customize(app, ui));
     });
     ui.separator();
-    let tabs: Vec<_> = TABS.iter().filter(|t| app.ui.ribbon.tab_visible(t.id)).chain(context::available(app)).collect();
+    let tabs: Vec<_> = TABS.iter().filter(|t| app.ui.ribbon.tab_visible(t.id)).chain(context::available_tabs(app)).collect();
     let vertical = ui.available_width() < 600.0;
     let temporary = !vertical && app.ui.ribbon.minimized && app.ui.ribbon.compact_mode() == MinimizeMode::Tabs;
     if vertical {

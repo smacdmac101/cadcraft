@@ -266,3 +266,39 @@ only the same three existing dead-code warnings in canvas rebuild code.
 The final `cargo build --workspace --bins --locked -j4` also passed. Its copied
 Windows executable was reopened only after the older test instance exited; launch,
 top-docked ribbon and clean sample state were checked in Computer Use/control.
+
+## GUI inventory and paper-space/status controls (2026-10-25)
+
+| ID | Trigger and resulting behavior | Main files | Validation |
+|---|---|---|---|
+| CC-035 | Establish a first-level Windows GUI inventory from live AutoCAD 2027 ribbon/status inspection and CADCraft runtime/source comparison. Record 31 surfaces, evidence levels, uninspected areas and prioritized follow-ups; distinguish visible commands from tested behavior and preserve the original reference drawing. | `docs/autocad-2027-gui-inventory.md`, UI parity/gaps records | Home/Insert/Annotate/Parametric/View/Manage/Output/Layout/Add-ins/Collaborate/Express Tools and status customization observed. Coordinates visibility toggled and restored; no save or cloud action. |
+| CC-036 | Opening a paper layout left the ribbon on unrelated tools. Add a transient Layout tab with Layout, Layout Viewports, Space and Plot panels using registered commands. Keep Layout available alongside Hatch/Table contexts, permit explicit context choice, retain the saved regular tab, and preserve detached contextual panels while their context remains available. Reuse docked/embedded/native ribbon renderers. | `ribbon{.rs,/context.rs,/floating.rs,/window.rs}`, ribbon tests, Ukrainian catalog | Paper/model transitions, regular-tab restoration, MVIEW dispatch, coexisting Table/Layout contexts, floating panels and disabled-context recovery; results below. |
+| CC-037 | Fixed status controls could not be hidden individually. Add a rightmost customization menu, background shortcut menu and Panels recovery entry. Persist validated per-item visibility for drafting controls, coordinates, space/scales and existing workspace/settings buttons. Keep Restore All outside the scroll area and visible when all items are hidden. Hidden coordinates do not suppress transient status/error messages. Visibility does not alter drafting state. | `chrome{.rs,/status.rs}`, `lib.rs`, `menus.rs`, `panel_menu.rs`, native workspace, status tests, i18n/catalog/protocol | Atomic invalid input, legacy defaults, visibility persistence/reset, native workspace round-trip and LINE input protection; results below. |
+| CC-038 | Escape while a popup was open also canceled a running drawing command. Let a popup own its first plain Escape before command-line keyboard processing; a later Escape can cancel normally. This protection applies to menus in root and native ribbon viewports. | `cmdline.rs`, `lib.rs`, status interaction regression | Open status customization while LINE runs, hide Grid without changing GRIDMODE or adding a point, dismiss the popup and continue the line; results below. |
+
+The inventory is not a claim of complete AutoCAD parity. Next priorities include inline
+layer/property/style controls, attribute-format/visual fixture checks, replacing the
+workspace no-op, native side palettes and quick-access customization. CADCraft's existing
+engine does not provide every visible AutoCAD workflow; unsupported tools were not added
+as decorative buttons. No Autodesk screenshots/assets or private drawing files are part
+of this contribution. Layout currently exposes supported 2D commands, not 3D view creation
+or standards controls. Status visibility retains existing defaults; a fully adaptive
+narrow-window overflow and arbitrary saved workspace presets remain follow-ups.
+
+Windows visual validation used a clean Bracket sample in an isolated profile after
+closing the previous build. Computer Use confirmed the blue Layout tab and its four
+panels in Layout1, then its disappearance and Home restoration in Model. The rightmost
+status customization menu showed checked visibility choices and a fixed Show All action.
+With LINE waiting for its first point, hiding Grid removed its status button; Escape
+closed the menu while LINE remained active, and a second Escape canceled normally.
+Control inspection confirmed hiddenStatusItems, command state and an unchanged clean
+drawing. Visibility was reset and the sample returned to Model. The original DWG was
+not opened or modified. Focused ribbon/status/native tests passed all 50 cases; the
+Windows desktop build passed. General label clipping at this window width remains
+tracked by GI-31; paper-layout tools do not add unsupported 3D functionality.
+Final validation (Windows, 2026-10-25): `cargo xtask ci` passed all six gates
+(fmt, Clippy with warnings denied, tests, assets, layering and wasm). The full run
+passed 2,323 tests with zero failures and zero ignored. Wasm retained only the three
+existing dead-code warnings in canvas rebuild code. The focused 50-test run and
+`cargo build --workspace --bins --locked -j4` also passed. The initial formatting
+check was corrected with the repository formatter before the successful full run.

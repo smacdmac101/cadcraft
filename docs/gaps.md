@@ -181,3 +181,5 @@ Detail: [localization-parity.md](localization-parity.md).
 | 2026-10-10 | minor | Merged main: closed or narrowed rows for the Ukrainian catalog, UNITS dialog, shortcut display, dynamic input pointer boxes, press-drag windows, SETVAR DIM*, WIPEOUT and gradients, fmt |
 | 2026-10-10 | minor | Alpha blockers marked (rows failing the core-workflow gate) |
 | 2026-10-10 | major | First gaps list: ranked top 10 and every known shortfall by dimension, with evidence and estimates |
+
+Focused Windows GUI inventory and priority work list: [AutoCAD 2027 GUI inventory](autocad-2027-gui-inventory.md). CC-036–CC-038 address the missing Layout context, individual status visibility and popup Escape ownership; the remaining gaps above retain their separate feature scope.
