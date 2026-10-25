@@ -75,7 +75,7 @@ fn missing_commands_menus_tools_and_snap_labels(language: &str) -> Vec<String> {
         }
     }
     sources.extend(cadcraft_engine::snap::mode::ALL.iter().map(|(_, name)| *name));
-    for tab in crate::ribbon::TABS {
+    for tab in crate::ribbon::TABS.iter().chain(crate::ribbon::context::TABS) {
         sources.insert(tab.label);
         for panel in tab.panels {
             sources.insert(panel.label);
@@ -99,6 +99,8 @@ fn missing_marked_ui_literals(language: &str) -> BTreeSet<String> {
         include_str!("../canvas.rs"),
         include_str!("../chrome.rs"),
         include_str!("../ribbon.rs"),
+        include_str!("../ribbon/floating.rs"),
+        include_str!("../ribbon/context.rs"),
         include_str!("../docking.rs"),
         include_str!("../docking/auto_hide.rs"),
         include_str!("../cmdline.rs"),

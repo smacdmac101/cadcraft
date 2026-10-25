@@ -1,6 +1,6 @@
 # UI parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-24 · **Change:** major (tabbed command ribbon with saved tab/panel visibility; focused AutoCAD 2027 Windows comparison) · **Target:** Autodesk AutoCAD 2027 for Mac (26.0), with the focused Windows pass below
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-25 · **Change:** major (tabbed command ribbon with saved tab/panel visibility; focused AutoCAD 2027 Windows comparison) · **Target:** Autodesk AutoCAD 2027 for Mac (26.0), with the focused Windows pass below
 
 How CADCraft's interaction compares with AutoCAD's: point entry, object snaps, tracking, dynamic
 input, grips, selection, the command line, chrome and navigation. A drafter's speed in AutoCAD
@@ -158,8 +158,8 @@ down-arrow options menu (DYNPROMPT), and DYNDIM.
 |---|---|---|
 | Menu bar | 11 menus, 491 leaf items | same 11 menus; 245/491 items covered (233 by `cargo xtask parity`, which counts engine commands only, plus 12 UI-only items: see [parity-checklist.md](parity-checklist.md)); once a menu is open, pointing at another title opens that menu (#1567) |
 | Tool Bar, File tabs, Start tab, layout tabs | yes | yes; compact quick access while the ribbon is shown, full classic toolbar with RIBBONCLOSE. Its overflow and saved group choices remain available. |
-| Ribbon tabs and tool panels | yes | Home, Insert, Annotate, Parametric, View, Manage and Output tabs, plus an optional Modeling tab; named panels with primary/secondary tools and overflow. Move to Ribbon transfers Tool Sets into this presentation; Move to Tool Sets restores the palette. Both use the original command catalogs and shared tool visibility. Right-click tabs, tools or background for Show Tabs/Show Panels. Choices, titles and display modes are saved; compact tab/panel flyouts provide temporary access. Restore Ribbon and the Panels/Window menus recover hidden controls. Floating ribbon panels, authored layouts and contextual object tabs remain open. |
-| Palette docking and auto-hide | title-bar menu, docking, anchoring and hover expansion | Every side-panel title menu has Dock Left/Right, Float and Auto-hide. Floating palettes also have explicit dock header buttons. Auto-hide retains edge tabs when docked or title bars when floating; hover opens an overlay, leaving closes it, and Keep Open pins the palette. Tool Sets alone has Move to Ribbon in its right-click menu. Width, placement and auto-hide choices are saved. Floating palettes stay inside the CADCraft window; native palette windows, docking locks and floating ribbon panels remain open work. |
+| Ribbon tabs and tool panels | yes | Home, Insert, Annotate, Parametric, View, Manage and Output tabs, plus an optional Modeling tab; named panels with primary/secondary tools and overflow. Move to Ribbon transfers Tool Sets into this presentation; Move to Tool Sets restores the palette. Both use the original command catalogs and shared tool visibility. Right-click tabs, tools or background for Show Tabs/Show Panels. Choices, titles and display modes are saved; compact tab/panel flyouts provide temporary access. Restore Ribbon and the Panels/Window menus recover hidden controls. Floating panels retain tools across tabs and return to their source slot. Contextual Hatch Editor, Table and Block Editor tabs activate from supported selections/editor state. Authored layouts, additional contexts and native floating windows remain open. |
+| Palette docking and auto-hide | title-bar menu, docking, anchoring and hover expansion | Every side-panel title menu has Dock Left/Right, Float and Auto-hide. Floating palettes also have explicit dock header buttons. Auto-hide retains edge tabs when docked or title bars when floating; hover opens an overlay, leaving closes it, and Keep Open pins the palette. Tool Sets alone has Move to Ribbon in its right-click menu. Width, placement and auto-hide choices are saved. Floating palettes stay inside the CADCraft window; native palette windows and docking locks remain open work. |
 | Tool Sets palette (Drafting, Modeling, … with flyouts) | yes | yes for 2D groups |
 | Properties Inspector, Quick Properties | yes | yes (every control acts or is visibly unavailable, #182); a single block reference exposes editable attribute values and read-only Position X/Y/Z; coordinate editing is still missing |
 | Block attribute editor | values, text options, attribute properties | Double-click an attributed block, or ATTEDIT/EATTEDIT with one selected, opens an attribute value dialog with Apply, OK and Cancel; constant values are read-only. Text-formatting and per-attribute property tabs remain missing; without a selected block the command uses prompts. |
@@ -204,8 +204,12 @@ include checked panel visibility. CADCraft now offers the equivalent choice for 
 top tool groups, including restoration after hiding all groups (CC-009). This update adds
 the tabbed ribbon, per-tab panel choices, panel titles and an explicit minimized state
 (CC-013–CC-017). The follow-up adds saved tabs, panel-title and panel-button minimize modes,
-the display cycle, and temporary tab/panel flyouts (CC-021–CC-022). Floating ribbon panels
-remain a gap. The minimize choices were observed in AutoCAD 2027 on Windows and checked
+the display cycle, and temporary tab/panel flyouts (CC-021–CC-022). Detached panels now remain across tab switches, support title dragging and Return to Ribbon, and save
+their positions (CC-025). Contextual Hatch Editor, Table and Block Editor tabs derive from the active
+document and selection/editor state (CC-026); regular tab choice is retained and restored. Context
+tabs use an accent treatment, can be disabled, and expose existing editing commands rather than
+claiming all AutoCAD contextual controls. Workspace validation, recovery and reference translations
+cover these additions (CC-027). Additional contexts, user-authored layouts and native windows remain gaps. The minimize choices were observed in AutoCAD 2027 on Windows and checked
 against the public [display-state reference](https://help.autodesk.com/cloudhelp/2027/ENU/AutoCAD-LT/files/GUID-627FCA86-38B1-404B-BB09-9FC3348B54F2.htm).
 
 Ribbon acceptance: select Annotate and start DIMLINEAR from its Dimensions panel; right-click a
@@ -254,6 +258,7 @@ the public [docking reference](https://help.autodesk.com/view/ACD/2027/ENU/?caas
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-25 | minor | CC-025–CC-027: detachable ribbon panels with saved positions and return controls; transient Hatch Editor, Table and Block Editor contexts; recovery, strict validation, translations and interaction coverage. |
 | 2026-10-24 | minor | CC-021–CC-024: ribbon display modes and temporary flyouts, saved display cycling, stable palette editor identities and strict panel-tab validation. |
 | 2026-10-24 | major | CC-013–CC-017: tabbed ribbon, per-tab panel visibility, saved customization, minimization and recovery; compact quick-access toolbar and command/interaction coverage. |
 | 2026-10-24 | minor | CC-018–CC-019: palette redocking controls, preserved width/placement, shared Tool Sets/ribbon presentation and tool visibility; compatible opt-in migration. |

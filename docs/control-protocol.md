@@ -201,8 +201,10 @@ as the examples above. They change the saved UI workspace and do not edit drawin
 | `ui.toggle.ribbon` | `{on?: bool}` | Set visibility, or toggle it when omitted. |
 | `ui.ribbon.tab` | `{tab, visible?: bool}` | With `visible`, show/hide the tab; otherwise select and reveal it. |
 | `ui.ribbon.panel` | `{tab?: active tab, panel, visible?: bool}` | Show/hide a panel within that tab; omitted `visible` toggles it. |
-| `ui.ribbon.options` | `{minimized?: bool, titles?: bool, minimizeMode?: "tabs"\|"panelTitles"\|"panelButtons"\|"cycle"}` | Configure panel expansion, compact presentation and title visibility. |
+| `ui.ribbon.options` | `{minimized?: bool, titles?: bool, minimizeMode?: "tabs"\|"panelTitles"\|"panelButtons"\|"cycle", contextualTabs?: bool}` | Configure panel expansion, compact presentation and title visibility. |
 | `ui.ribbon.cycle` | `{}` | Toggle the chosen minimize mode, or cycle Full → Panel Buttons → Panel Titles → Tabs → Full when `cycle` is selected. |
+| `ui.ribbon.float` | `{tab?: effective active tab, panel, position?: [x,y]}` | Detach or move a unique panel in logical window coordinates; finite bounded positions only. |
+| `ui.ribbon.return` | `{tab?: effective active tab, panel}` or `{all:true}` | Return one or all detached panels to their original ribbon positions. |
 | `ui.ribbon.reset` | `{}` | Show and restore the default drafting ribbon; Modeling remains available through Show Tabs or moving the Modeling tool set. |
 
 Drafting tab IDs are `home`, `insert`, `annotate`, `parametric`, `view`, `manage`, `output`.
@@ -239,3 +241,21 @@ To return a floating palette to a side, execute `ui.dock` with
 the palette width within its size limits. The same command is exposed by floating title-bar
 buttons and palette title context menus. Invalid zones are rejected atomically; closing an
 already closed palette is idempotent. The protected drawing view cannot be docked as a palette.
+
+### Detached panels and contextual ribbon tabs
+
+Detached panels are saved as `ui.ribbon.floatingPanels` (`tab`, `panel`, `position`), remain
+available across regular tab switches and share command visibility with the ribbon. Title drag
+and Float Panel detach; Return to Ribbon or closing the floating window returns the tools.
+They are constrained to the application window, including after resizing. RIBBONCLOSE hides
+both the ribbon and its detached panels; reopening retains positions. Restore Ribbon clears
+detachment. A panel hidden through `ui.ribbon.panel` retains its saved floating position.
+
+The transient effective tab can be `hatchEditor` (homogeneous hatch selection), `tableEditor`
+(homogeneous table selection) or `blockEditor` (active BEDIT session takes priority).
+`ui.ribbon.tab` selects an available context but rejects unavailable contexts and context
+visibility changes. The saved `activeTab` always names a regular tab, so leaving the context
+or switching documents restores the chosen regular tab. Users may choose a regular tab while
+a context remains available. `contextualTabs:false` disables automatic contexts.
+Contextual floating panels are visible only while their matching context is available.
+These tabs expose existing commands; an in-place Text Editor ribbon is not implemented.

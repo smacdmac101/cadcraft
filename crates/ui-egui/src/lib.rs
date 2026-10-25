@@ -258,6 +258,7 @@ pub struct CadApp {
     pub hatch_dlg: Option<hatchdlg::HatchDlgState>,
     /// The Edit Block Definition dialog ([`bedit`]).
     pub bedit: bedit::State,
+    pub ribbon_context: ribbon::context::Runtime,
 }
 
 impl CadApp {
@@ -298,6 +299,7 @@ impl CadApp {
             alias_dlg: None,
             hatch_dlg: None,
             bedit: bedit::State::default(),
+            ribbon_context: ribbon::context::Runtime::default(),
         }
     }
 

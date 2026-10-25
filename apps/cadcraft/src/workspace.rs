@@ -236,6 +236,9 @@ mod tests {
         ui.ribbon.minimized = true;
         ui.ribbon.minimize_mode = cadcraft_ui_egui::ribbon::MinimizeMode::Cycle;
         ui.ribbon.cycle_position = 1;
+        ui.ribbon.contextual_tabs = false;
+        ui.ribbon.floating_panels =
+            serde_json::from_value(serde_json::json!([{ "tab": "home", "panel": "modify", "position": [420.0, 280.0] }])).unwrap();
         ui.docking.auto_hide = vec![cadcraft_ui_egui::docking::Panel::Properties];
         first.save_if_changed(&ui).unwrap();
         let bytes = fs::read(&path).unwrap();

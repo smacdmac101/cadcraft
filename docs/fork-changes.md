@@ -93,3 +93,34 @@ canvas geometry while flyouts open, and display settings retained after restart.
 The wasm check emitted three existing dead-code warnings in canvas rebuild code.
 Remaining gaps include floating ribbon panels, authored layouts, contextual object tabs and
 native OS palette windows. This follow-up does not add unsupported modeling commands.
+
+## Floating panels and contextual tabs (2026-10-25)
+
+Reference: AutoCAD 2027's public [ribbon behavior](https://help.autodesk.com/cloudhelp/2027/ENU/AutoCAD-LT/files/GUID-D20EF1D7-4135-48A7-B68E-65BF3BFF3D70.htm)
+describes detached panels retained across tab switches and contextual tabs selected by object
+or command state. The installed Windows ribbon was inspected; detachment semantics follow the public
+reference. Context references include the [Hatch Editor](https://help.autodesk.com/view/ACD/2027/ENU/?caas=caas%2Fdocumentation%2FACD%2F2014%2FENU%2Ffiles%2FGUID-B3FF6503-8FFB-4F1A-A603-52A6408F0D66-htm.html)
+and [Table](https://help.autodesk.com/view/ACD/2027/ENU/?caas=caas%2Fdocumentation%2FCIV3D%2F2014%2FENU%2FfilesACD%2FGUID-367470A6-6E6E-4181-9E53-9B0EC88F50DC-htm.html).
+CADCraft uses its own existing icons and commands. Its Table context activates on a whole-table
+selection; it does not claim AutoCAD's cell-selection editor or formatting ribbon.
+
+| ID | Trigger and resulting behavior | Main files | Validation |
+|---|---|---|---|
+| CC-025 | Tools could only appear in the ribbon or temporary flyouts. Add Float Panel to panel context menus, title-drag detachment, compact movable persistent panels and explicit Return to Ribbon/Return All recovery. Panels retain their tab-qualified identity, remain across tab switches and return to the original source slot; close also returns tools. | `crates/ui-egui/src/ribbon.rs`, `ribbon/floating.rs`, `menus.rs`; ribbon interaction tests | Drag, command dispatch, return placement and canvas input isolation; final results below. |
+| CC-026 | Object/editor selection did not expose related ribbon tools. Add accented Hatch Editor, Table and Block Editor tabs from homogeneous selections/BEDIT, with editor priority, document transitions, manual regular-tab choice, preserved context during visibility customization, readable selected labels, automatic fallback and an opt-out. Keep runtime context separate from saved regular-tab preferences; contextual detached panels only show in matching contexts. | `ribbon/context.rs`, `ribbon.rs`, `lib.rs`; ribbon interaction tests | Selection, mixed types, editor entry/exit, document switching, manual choice and disabled-context checks. |
+| CC-027 | New panel state must be safe, compatible and reviewable. Persist positions and contextual preferences with legacy defaults; reject malformed, non-finite, oversized or duplicate panel state atomically; constrain floating controls to the application window and recover through reset/return. Extend Ukrainian reference coverage and control/parity documentation. | `apps/cadcraft/src/workspace.rs`, `ribbon.rs`, `ribbon/floating.rs`, `i18n/{tests.rs,uk.tsv}`, `docs/{control-protocol.md,ui-parity.md,fork-changes.md}` | Native workspace round-trip, invalid-input/uniqueness/recovery tests, translation checks and full CI. |
+
+Validation on Windows, 2026-10-25: all six `cargo xtask ci` steps passed on the final
+source (fmt, Clippy, tests, assets, layering, wasm); 2,297 tests passed, with no failures
+or ignored tests. The ribbon/palette interaction suites passed all 33 cases, including
+title/header dragging, panel return placement, context lifetime, mixed selection,
+document switching, visibility customization and canvas input isolation.
+`cargo build --workspace --bins --locked -j 4` passed. Native checks confirmed compact
+floating geometry, readable context labels, all three supported contexts, regular-tab
+fallback, command dispatch without an accidental first point, and exact saved panel/tab
+preferences after restart. The original drawing was untouched; visual checks used the
+sample drawing and disposable geometry in a separate workspace profile. The wasm check
+emitted the same three existing dead-code warnings in canvas rebuild code.
+Scope: floating panels remain inside the application window. Native OS/second-monitor panels,
+user-authored ribbon layouts, an in-place Text Editor ribbon, and the rest of AutoCAD's
+context-specific properties/tool catalog remain gaps. No new editing engine is implied.

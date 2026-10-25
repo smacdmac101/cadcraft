@@ -25,6 +25,8 @@ pub const UI_COMMANDS: &[(&str, &str, &[&str], Option<&str>)] = &[
     ("ui.ribbon.panel", "Ribbon Panel", &[], None),
     ("ui.ribbon.options", "Ribbon Options", &[], None),
     ("ui.ribbon.reset", "Restore Ribbon", &[], None),
+    ("ui.ribbon.float", "Float Panel", &[], None),
+    ("ui.ribbon.return", "Return to Ribbon", &[], None),
     ("ui.ribbon.cycle", "Cycle Ribbon Display", &[], None),
     ("ui.toolbar.group", "Show or Hide Tool Group", &[], None),
     ("ui.toolbar.reset", "Show All Tool Groups", &[], None),

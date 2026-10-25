@@ -18,6 +18,210 @@ fn harness(width: f32) -> Harness<'static, CadApp> {
 }
 
 #[test]
+fn detached_panel_stays_across_tabs_and_returns_to_its_original_place() {
+    let mut h = harness(1600.0);
+    let original = h.get_by_label("Ribbon / Draw: Line").rect();
+    h.get_by_label("Ribbon / Draw: Line").click_secondary();
+    h.run_steps(3);
+    h.get_by_label("Float Panel").click();
+    h.run_steps(5);
+    assert_eq!(h.state().ui.ribbon.floating_panels.len(), 1);
+    h.get_by_label("Ribbon Tab: Annotate").click();
+    h.run_steps(4);
+    assert!(h.query_by_label("Ribbon / Draw: Line").is_some());
+    h.get_by_label("Return to Ribbon").click();
+    h.run_steps(4);
+    assert!(h.state().ui.ribbon.floating_panels.is_empty());
+    assert!(h.query_by_label("Ribbon / Draw: Line").is_none());
+    h.get_by_label("Ribbon Tab: Home").click();
+    h.run_steps(4);
+    assert_eq!(h.get_by_label("Ribbon / Draw: Line").rect(), original);
+}
+
+#[test]
+fn detached_panel_configuration_is_atomic_unique_and_restorable() {
+    let mut h = harness(1600.0);
+    let initial = h.state().ui.ribbon.clone();
+    for params in [
+        json!({"tab":"bad","panel":"draw"}),
+        json!({"panel":"missing"}),
+        json!({"panel":"draw","position":[1]}),
+        json!({"panel":"draw","position":[1e200,0]}),
+    ] {
+        assert!(h.state_mut().run("ui.ribbon.float", params).is_err());
+        assert_eq!(h.state().ui.ribbon, initial);
+    }
+    for x in [300, 400] {
+        h.state_mut().run("ui.ribbon.float", json!({"panel":"draw","position":[x,300]})).unwrap();
+    }
+    assert_eq!(h.state().ui.ribbon.floating_panels.len(), 1);
+    let json = serde_json::to_value(&h.state().ui.ribbon).unwrap();
+    assert_eq!(serde_json::from_value::<ribbon::State>(json).unwrap(), h.state().ui.ribbon);
+    h.state_mut().run("ui.ribbon.return", json!({"all":true})).unwrap();
+    assert_eq!(h.state().ui.ribbon, initial);
+}
+
+fn drag_ribbon(h: &mut Harness<'static, CadApp>, from: egui::Pos2, to: egui::Pos2) {
+    h.event(egui::Event::PointerMoved(from));
+    h.run_steps(2);
+    h.event(egui::Event::PointerButton { pos: from, button: egui::PointerButton::Primary, pressed: true, modifiers: egui::Modifiers::NONE });
+    h.run_steps(2);
+    for step in 1..=8 {
+        h.event(egui::Event::PointerMoved(from.lerp(to, step as f32 / 8.0)));
+        h.run_steps(1);
+    }
+    h.event(egui::Event::PointerButton { pos: to, button: egui::PointerButton::Primary, pressed: false, modifiers: egui::Modifiers::NONE });
+    h.run_steps(4);
+}
+
+#[test]
+fn title_drag_detaches_and_floating_header_drag_saves_its_position() {
+    let mut h = harness(1600.0);
+    let from = h.get_by_label("Ribbon Panel: Draw").rect().center();
+    drag_ribbon(&mut h, from, egui::pos2(400.0, 300.0));
+    assert_eq!(h.state().ui.ribbon.floating_panels.len(), 1);
+    let before = h.state().ui.ribbon.floating_panels[0].position;
+    let from = egui::pos2(before[0] + 70.0, before[1] + 12.0);
+    drag_ribbon(&mut h, from, from + vec2(200.0, 50.0));
+    let after = h.state().ui.ribbon.floating_panels[0].position;
+    assert!(after[0] > before[0] + 150.0, "{before:?} -> {after:?}");
+}
+
+#[test]
+fn a_floating_tool_click_does_not_place_a_canvas_point() {
+    let mut app = CadApp::new(Session::default(), Services::default());
+    app.run("new", json!({})).unwrap();
+    app.run("ribbon", json!({})).unwrap();
+    app.run("ui.ribbon.float", json!({"panel":"draw","position":[400,300]})).unwrap();
+    let dirty = app.session.state().unwrap().is_dirty();
+    let mut h = Harness::builder().with_size(vec2(1600.0, 900.0)).build_ui_state(
+        |ui, app: &mut CadApp| {
+            app.logic(ui.ctx());
+            app.ui(ui);
+        },
+        app,
+    );
+    h.run_steps(5);
+    h.get_by_label("Ribbon / Draw: Line").click();
+    h.run_steps(5);
+    assert!(h.state().session.prompt_text().starts_with("LINE Specify first point"));
+    assert_eq!(h.state().session.state().unwrap().is_dirty(), dirty);
+}
+
+fn select_context_entity(h: &mut Harness<'static, CadApp>, kind: &str) -> cadcraft_engine::doc::Handle {
+    let result = if kind == "hatch" {
+        h.state_mut().run("circle", json!({"center":[0,0],"radius":5})).unwrap();
+        h.state_mut().run("hatch", json!({"points":[[0,0]],"pattern":"SOLID"})).unwrap()
+    } else {
+        h.state_mut().run("table", json!({"at":[0,0],"rows":2,"cols":2})).unwrap()
+    };
+    let handle = cadcraft_engine::doc::Handle::parse_hex(result["handle"].as_str().unwrap()).unwrap();
+    h.state_mut().session.set_selection(vec![handle]);
+    h.run_steps(4);
+    handle
+}
+
+#[test]
+fn selection_context_activates_tools_and_restores_the_last_regular_tab() {
+    let mut h = harness(1600.0);
+    h.get_by_label("Ribbon Tab: Annotate").click();
+    h.run_steps(3);
+    select_context_entity(&mut h, "hatch");
+    assert!(h.query_by_label("Ribbon Tab: Hatch Editor").is_some());
+    assert!(h.query_by_label("Ribbon / Hatch: Hatch Edit").is_some());
+    assert_eq!(h.state().ui.ribbon.active_tab, "annotate");
+    h.get_by_label("Ribbon / Hatch: Hatch Edit").click();
+    h.run_steps(3);
+    assert!(h.state().hatch_dlg.is_some());
+    h.state_mut().hatch_dlg = None;
+    h.state_mut().session.set_selection(vec![]);
+    h.run_steps(3);
+    assert!(h.query_by_label("Ribbon Tab: Hatch Editor").is_none());
+    assert!(h.query_by_label("Ribbon / Dimensions: Linear").is_some());
+}
+
+#[test]
+fn contextual_tabs_allow_regular_tab_choice_and_reject_mixed_selection() {
+    let mut h = harness(1600.0);
+    let hatch = select_context_entity(&mut h, "hatch");
+    h.state_mut().run("ui.ribbon.tab", json!({"tab":"output","visible":false})).unwrap();
+    h.run_steps(3);
+    assert!(h.query_by_label("Ribbon / Hatch: Hatch Edit").is_some(), "visibility changes must not switch the active context");
+    h.get_by_label("Ribbon Tab: Home").click();
+    h.run_steps(4);
+    assert!(h.query_by_label("Ribbon / Draw: Line").is_some());
+    assert!(h.query_by_label("Ribbon Tab: Hatch Editor").is_some());
+    let table = select_context_entity(&mut h, "table");
+    assert!(h.query_by_label("Ribbon / Table Cells: Edit Table Cell").is_some());
+    h.state_mut().session.set_selection(vec![hatch, table]);
+    h.run_steps(3);
+    assert!(h.query_by_label("Ribbon Tab: Table").is_none());
+    assert!(h.query_by_label("Ribbon Tab: Hatch Editor").is_none());
+    assert!(h.state_mut().run("ui.ribbon.tab", json!({"tab":"hatchEditor"})).is_err());
+    h.state_mut().session.set_selection(vec![table]);
+    h.run_steps(3);
+    h.state_mut().run("ui.ribbon.options", json!({"contextualTabs":false})).unwrap();
+    h.run_steps(3);
+    assert!(h.query_by_label("Ribbon Tab: Table").is_none());
+    assert!(h.query_by_label("Ribbon / Draw: Line").is_some());
+}
+
+#[test]
+fn block_editor_context_tracks_editor_lifetime_and_document_switching() {
+    let mut h = harness(1600.0);
+    let editing_document = h.state().session.active;
+    h.state_mut().run("bedit", json!({"name":"<Current Drawing>"})).unwrap();
+    h.run_steps(4);
+    assert!(h.query_by_label("Ribbon Tab: Block Editor").is_some());
+    assert!(h.query_by_label("Ribbon / Block Definition: Close Block Editor").is_some());
+    h.state_mut().run("new", json!({})).unwrap();
+    h.run_steps(3);
+    assert!(h.query_by_label("Ribbon Tab: Block Editor").is_none());
+    h.state_mut().session.active = editing_document;
+    h.run_steps(3);
+    assert!(h.query_by_label("Ribbon Tab: Block Editor").is_some());
+    h.get_by_label("Ribbon / Block Definition: Close Block Editor").click();
+    h.run_steps(4);
+    assert!(h.query_by_label("Ribbon Tab: Block Editor").is_none());
+    assert!(h.query_by_label("Ribbon / Draw: Line").is_some());
+}
+
+#[test]
+fn contextual_floating_panels_follow_context_availability_without_losing_their_position() {
+    let mut h = harness(1600.0);
+    let hatch = select_context_entity(&mut h, "hatch");
+    h.state_mut().run("ui.ribbon.float", json!({"tab":"hatchEditor","panel":"edit","position":[600,300]})).unwrap();
+    h.run_steps(4);
+    assert!(h.query_by_label("Return to Ribbon").is_some());
+    let saved = h.state().ui.ribbon.floating_panels.clone();
+    h.state_mut().session.set_selection(vec![]);
+    h.run_steps(4);
+    assert!(h.query_by_label("Return to Ribbon").is_none());
+    assert_eq!(h.state().ui.ribbon.floating_panels, saved);
+    h.state_mut().session.set_selection(vec![hatch]);
+    h.run_steps(4);
+    assert!(h.query_by_label("Return to Ribbon").is_some());
+}
+
+#[test]
+fn offscreen_panels_are_constrained_and_duplicate_saved_state_is_rejected() {
+    let mut h = harness(520.0);
+    h.state_mut().run("ui.ribbon.float", json!({"panel":"draw","position":[90000,90000]})).unwrap();
+    h.run_steps(6);
+    let rect = h.get_by_label("Return to Ribbon").rect();
+    assert!(rect.right() <= 520.0 && rect.bottom() <= 600.0, "{rect:?}");
+    let mut invalid = h.state().ui.ribbon.clone();
+    invalid.floating_panels.push(invalid.floating_panels[0].clone());
+    assert!(invalid.validate().is_err());
+    h.state_mut().run("ribbonclose", json!({})).unwrap();
+    h.run_steps(3);
+    assert!(h.query_by_label("Return to Ribbon").is_none());
+    h.state_mut().run("ribbon", json!({})).unwrap();
+    h.run_steps(3);
+    assert!(h.query_by_label("Return to Ribbon").is_some());
+}
+
+#[test]
 fn selecting_a_tab_changes_tools_and_a_tool_runs_the_registry_command() {
     let mut h = harness(1600.0);
     h.get_by_label("Ribbon Tab: Annotate").click();

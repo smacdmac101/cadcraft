@@ -8,6 +8,9 @@ use egui::{Sense, vec2};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
+pub mod context;
+mod floating;
+
 type Tool = (Icon, &'static str, &'static str);
 
 pub struct Panel {
@@ -230,7 +233,7 @@ impl MinimizeMode {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct State {
     pub active_tab: String,
@@ -241,6 +244,8 @@ pub struct State {
     pub minimize_mode: MinimizeMode,
     pub cycle_position: u8,
     pub show_titles: bool,
+    pub contextual_tabs: bool,
+    pub floating_panels: Vec<floating::FloatingPanel>,
 }
 impl Default for State {
     fn default() -> Self {
@@ -252,17 +257,23 @@ impl Default for State {
             minimize_mode: MinimizeMode::Tabs,
             cycle_position: 0,
             show_titles: true,
+            contextual_tabs: true,
+            floating_panels: Vec::new(),
         }
     }
 }
 impl State {
     pub fn validate(&self) -> Result<(), String> {
         if self.cycle_position > 2
+            || !floating::valid(&self.floating_panels)
             || self.hidden_tabs.len() > TABS.len()
             || self.hidden_panels.len() > 64
-            || tab(&self.active_tab).is_none()
-            || self.hidden_tabs.iter().any(|id| tab(id).is_none())
-            || self.hidden_panels.iter().any(|id| !TABS.iter().any(|t| t.panels.iter().any(|p| *id == format!("{}.{}", t.id, p.id))))
+            || !TABS.iter().any(|t| t.id == self.active_tab)
+            || self.hidden_tabs.iter().any(|id| !TABS.iter().any(|t| t.id == id))
+            || self
+                .hidden_panels
+                .iter()
+                .any(|id| !TABS.iter().chain(context::TABS).any(|t| t.panels.iter().any(|p| *id == format!("{}.{}", t.id, p.id))))
         {
             return Err("Invalid ribbon tab or panel settings".into());
         }
@@ -277,6 +288,9 @@ impl State {
     fn active(&self) -> Option<&'static Tab> {
         tab(&self.active_tab).filter(|t| self.tab_visible(t.id)).or_else(|| TABS.iter().find(|t| self.tab_visible(t.id)))
     }
+    fn docked(&self, tab: &str, panel: &str) -> bool {
+        self.panel_visible(tab, panel) && !self.floating_panels.iter().any(|p| p.tab == tab && p.panel == panel)
+    }
     fn compact_mode(&self) -> MinimizeMode {
         match (self.minimize_mode, self.cycle_position) {
             (MinimizeMode::Cycle, 0) => MinimizeMode::PanelButtons,
@@ -287,7 +301,7 @@ impl State {
     }
 }
 fn tab(id: &str) -> Option<&'static Tab> {
-    TABS.iter().find(|t| t.id == id)
+    TABS.iter().chain(context::TABS).find(|t| t.id == id)
 }
 fn visibility(hidden: &mut Vec<String>, id: &str, visible: bool) {
     hidden.retain(|h| h != id);
@@ -304,6 +318,8 @@ pub(crate) fn route(app: &mut CadApp, id: &str, p: &Value) -> Option<Result<Valu
             | "ui.ribbon.options"
             | "ui.ribbon.reset"
             | "ui.ribbon.cycle"
+            | "ui.ribbon.float"
+            | "ui.ribbon.return"
             | "ui.toggle.ribbon"
             | "ribbon"
             | "ribbonclose"
@@ -316,6 +332,9 @@ pub(crate) fn route(app: &mut CadApp, id: &str, p: &Value) -> Option<Result<Valu
     Some(configure(app, id, p))
 }
 fn configure(app: &mut CadApp, id: &str, p: &Value) -> Result<Value, String> {
+    if matches!(id, "ui.ribbon.float" | "ui.ribbon.return") {
+        return floating::configure(app, id, p);
+    }
     if id == "ui.toolsets.tools.reset" {
         app.ui.hidden_tools.clear();
         return Ok(json!({"hiddenTools":[]}));
@@ -342,6 +361,7 @@ fn configure(app: &mut CadApp, id: &str, p: &Value) -> Result<Value, String> {
     if id == "ui.ribbon.reset" {
         crate::docking::command(app, false, &json!({"operation":"close","panel":"toolSets"}))?;
         app.ui.ribbon = State::default();
+        app.ribbon_context = context::Runtime::default();
         app.ui.show_ribbon = true;
         return Ok(json!({"ribbon":app.ui.ribbon}));
     }
@@ -363,6 +383,13 @@ fn configure(app: &mut CadApp, id: &str, p: &Value) -> Result<Value, String> {
     match id {
         "ui.ribbon.tab" => {
             let t = p.get("tab").and_then(Value::as_str).and_then(tab).ok_or("Unknown ribbon tab")?;
+            if context::TABS.iter().any(|c| c.id == t.id) {
+                if p.get("visible").is_some() || context::available(app).is_none_or(|c| c.id != t.id) {
+                    return Err("Contextual ribbon tab is unavailable".into());
+                }
+                app.ribbon_context.active = true;
+                return Ok(json!({"contextualTab": t.id}));
+            }
             if p.get("visible").is_some() {
                 visibility(&mut next.hidden_tabs, t.id, bool_param(p, "visible", true)?);
             } else {
@@ -376,7 +403,7 @@ fn configure(app: &mut CadApp, id: &str, p: &Value) -> Result<Value, String> {
         "ui.ribbon.panel" => {
             let t = match p.get("tab") {
                 Some(value) => value.as_str().and_then(tab).ok_or("Unknown ribbon tab")?,
-                None => next.active().ok_or("Select a ribbon tab first")?,
+                None => context::active(app).ok_or("Select a ribbon tab first")?,
             };
             let panel =
                 p.get("panel").and_then(Value::as_str).and_then(|id| t.panels.iter().find(|panel| panel.id == id)).ok_or("Unknown ribbon panel")?;
@@ -386,6 +413,7 @@ fn configure(app: &mut CadApp, id: &str, p: &Value) -> Result<Value, String> {
         "ui.ribbon.options" => {
             next.minimized = bool_param(p, "minimized", next.minimized)?;
             next.show_titles = bool_param(p, "titles", next.show_titles)?;
+            next.contextual_tabs = bool_param(p, "contextualTabs", next.contextual_tabs)?;
             if let Some(mode) = p.get("minimizeMode") {
                 next.minimize_mode = serde_json::from_value(mode.clone()).map_err(|_| "Unknown ribbon minimize mode")?;
                 next.cycle_position = 0;
@@ -402,6 +430,9 @@ fn configure(app: &mut CadApp, id: &str, p: &Value) -> Result<Value, String> {
         _ => {}
     }
     next.validate()?;
+    if id == "ui.ribbon.tab" && p.get("visible").is_none() {
+        app.ribbon_context.active = false;
+    }
     app.ui.ribbon = next;
     Ok(json!({"ribbon":app.ui.ribbon}))
 }
@@ -423,7 +454,7 @@ pub(crate) fn customize(app: &mut CadApp, ui: &mut egui::Ui) {
             }
         }
     });
-    if let Some(t) = app.ui.ribbon.active() {
+    if let Some(t) = context::active(app) {
         ui.menu_button(crate::tl!("Show Panels"), |ui| {
             ui.label(crate::i18n::t(t.label));
             for p in t.panels {
@@ -433,6 +464,14 @@ pub(crate) fn customize(app: &mut CadApp, ui: &mut egui::Ui) {
                 }
             }
         });
+    }
+    let mut contextual = app.ui.ribbon.contextual_tabs;
+    if ui.checkbox(&mut contextual, crate::tl!("Show Contextual Tabs")).changed() {
+        let _ = app.run("ui.ribbon.options", json!({"contextualTabs":contextual}));
+    }
+    if ui.button(crate::tl!("Return All Panels to Ribbon")).clicked() {
+        let _ = app.run("ui.ribbon.return", json!({"all":true}));
+        ui.close();
     }
     let mut minimized = app.ui.ribbon.minimized;
     if ui.checkbox(&mut minimized, crate::tl!("Minimize Ribbon")).changed() {
@@ -507,10 +546,11 @@ fn tool_button(ui: &mut egui::Ui, tool: Tool, large: bool, panel_label: &str) ->
     response.on_hover_text(crate::i18n::t(label))
 }
 
-fn show_panel(app: &CadApp, ui: &mut egui::Ui, panel: &Panel, titles: bool, context: &mut egui::Response, clicked: &mut Option<&'static str>) {
+fn show_panel(app: &mut CadApp, ui: &mut egui::Ui, tab_id: &str, panel: &Panel, titles: bool, clicked: &mut Option<&'static str>) {
     let t = Tokens::get();
     let (rect, _) = ui.allocate_exact_size(vec2(188.0, 112.0), Sense::hover());
     ui.painter().rect_filled(rect, 2.0, t.panel);
+    let mut local_context = ui.interact(rect, ui.id().with("panel_context"), Sense::click());
     let tools: Vec<_> = tools(panel).into_iter().filter(|(_, command, _)| !app.ui.hidden_tools.iter().any(|hidden| hidden == command)).collect();
     for (index, tool) in tools.iter().take(4).enumerate() {
         let large = index == 0;
@@ -521,7 +561,7 @@ fn show_panel(app: &CadApp, ui: &mut egui::Ui, panel: &Panel, titles: bool, cont
                 ui.add_enabled_ui(enabled(app, tool.1), |ui| tool_button(ui, *tool, large, panel.label)).inner
             })
             .inner;
-        *context |= response.clone();
+        local_context |= response.clone();
         if response.clicked() {
             *clicked = Some(tool.1);
         }
@@ -532,8 +572,16 @@ fn show_panel(app: &CadApp, ui: &mut egui::Ui, panel: &Panel, titles: bool, cont
             let reserved = if tools.len() > 4 { 48.0 } else { 0.0 } + if panel.launcher.is_some() { 28.0 } else { 0.0 };
             let title = ui.add_sized(
                 vec2((footer.width() - reserved).max(32.0), 22.0),
-                egui::Label::new(egui::RichText::new(crate::i18n::t(panel.label)).size(11.0)).truncate(),
+                egui::Label::new(egui::RichText::new(crate::i18n::t(panel.label)).size(11.0)).truncate().sense(Sense::click_and_drag()),
             );
+            local_context |= title.clone();
+            title.clone().on_hover_text(crate::tl!("Drag panel title to float"));
+            if title.drag_stopped()
+                && let Some(pos) = title.interact_pointer_pos()
+                && !rect.contains(pos)
+            {
+                let _ = app.run("ui.ribbon.float", json!({"tab":tab_id,"panel":panel.id,"position":[pos.x,pos.y]}));
+            }
             title.widget_info(|| {
                 egui::WidgetInfo::labeled(
                     egui::WidgetType::Label,
@@ -562,12 +610,23 @@ fn show_panel(app: &CadApp, ui: &mut egui::Ui, panel: &Panel, titles: bool, cont
         if let Some(command) = panel.launcher {
             let response = ui.small_button("↗").on_hover_text(crate::i18n::t(panel.label));
             icons::describe_control(ui, &response, &format!("{}: {}", crate::tl!("Ribbon Panel"), crate::i18n::t(panel.label)), None, false);
-            *context |= response.clone();
+            local_context |= response.clone();
             if response.clicked() {
                 *clicked = Some(command);
             }
         }
     });
+    local_context.context_menu(|ui| panel_menu(app, ui, tab_id, panel));
+}
+
+fn panel_menu(app: &mut CadApp, ui: &mut egui::Ui, tab_id: &str, panel: &Panel) {
+    let floating = app.ui.ribbon.floating_panels.iter().any(|p| p.tab == tab_id && p.panel == panel.id);
+    let label = if floating { crate::tl!("Return to Ribbon") } else { crate::tl!("Float Panel") };
+    if ui.button(label).clicked() {
+        let _ = app.run(if floating { "ui.ribbon.return" } else { "ui.ribbon.float" }, json!({"tab":tab_id,"panel":panel.id}));
+        ui.close();
+    }
+    customize(app, ui);
 }
 
 pub fn show(app: &mut CadApp, ui: &mut egui::Ui) {
@@ -577,6 +636,7 @@ pub fn show(app: &mut CadApp, ui: &mut egui::Ui) {
     if app.ui.ribbon.validate().is_err() {
         app.ui.ribbon = State::default();
     }
+    context::sync(app);
     let t = Tokens::get();
     let minimized = app.ui.ribbon.minimized;
     let compact = app.ui.ribbon.compact_mode();
@@ -598,9 +658,11 @@ pub fn show(app: &mut CadApp, ui: &mut egui::Ui) {
             ui.horizontal(|ui| {
                 egui::ScrollArea::horizontal().id_salt("ribbon_tabs").max_width((ui.available_width() - 162.0).max(32.0)).show(ui, |ui| {
                     ui.horizontal(|ui| {
-                        for tab in TABS.iter().filter(|t| app.ui.ribbon.tab_visible(t.id)).collect::<Vec<_>>() {
-                            let active = app.ui.ribbon.active().is_some_and(|t| t.id == tab.id);
-                            let response = ui.selectable_label(active, crate::i18n::t(tab.label));
+                        for tab in TABS.iter().filter(|t| app.ui.ribbon.tab_visible(t.id)).chain(context::available(app)).collect::<Vec<_>>() {
+                            let active = context::active(app).is_some_and(|t| t.id == tab.id);
+                            let contextual = context::TABS.iter().any(|t| t.id == tab.id);
+                            let text = egui::RichText::new(crate::i18n::t(tab.label));
+                            let response = ui.selectable_label(active, if contextual && !active { text.color(t.accent).strong() } else { text });
                             response.widget_info(|| {
                                 egui::WidgetInfo::selected(
                                     egui::WidgetType::SelectableLabel,
@@ -625,7 +687,7 @@ pub fn show(app: &mut CadApp, ui: &mut egui::Ui) {
                                     .show(|ui| flyout(app, ui, tab, None, &mut clicked));
                             }
                         }
-                        if app.ui.ribbon.active().is_none() {
+                        if context::active(app).is_none() {
                             ui.label(crate::tl!("No ribbon tabs are visible"));
                         }
                     });
@@ -656,10 +718,10 @@ pub fn show(app: &mut CadApp, ui: &mut egui::Ui) {
             });
             if minimized && matches!(compact, MinimizeMode::PanelTitles | MinimizeMode::PanelButtons) {
                 ui.separator();
-                if let Some(tab) = app.ui.ribbon.active() {
+                if let Some(tab) = context::active(app) {
                     egui::ScrollArea::horizontal().id_salt("compact_ribbon_panels").show(ui, |ui| {
                         ui.horizontal_top(|ui| {
-                            let panels: Vec<_> = tab.panels.iter().filter(|p| app.ui.ribbon.panel_visible(tab.id, p.id)).collect();
+                            let panels: Vec<_> = tab.panels.iter().filter(|p| app.ui.ribbon.docked(tab.id, p.id)).collect();
                             for panel in panels {
                                 ui.push_id((tab.id, panel.id), |ui| {
                                     let label = crate::i18n::t(panel.label);
@@ -706,7 +768,7 @@ pub fn show(app: &mut CadApp, ui: &mut egui::Ui) {
                                         None,
                                         false,
                                     );
-                                    context |= response.clone();
+                                    response.context_menu(|ui| panel_menu(app, ui, tab.id, panel));
                                     egui::Popup::menu(&response)
                                         .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
                                         .show(|ui| flyout(app, ui, tab, Some(panel.id), &mut clicked));
@@ -720,8 +782,8 @@ pub fn show(app: &mut CadApp, ui: &mut egui::Ui) {
                 ui.separator();
                 egui::ScrollArea::horizontal().id_salt("ribbon_panels").show(ui, |ui| {
                     ui.horizontal_top(|ui| {
-                        if let Some(tab) = app.ui.ribbon.active() {
-                            let panels: Vec<_> = tab.panels.iter().filter(|p| app.ui.ribbon.panel_visible(tab.id, p.id)).collect();
+                        if let Some(tab) = context::active(app) {
+                            let panels: Vec<_> = tab.panels.iter().filter(|p| app.ui.ribbon.docked(tab.id, p.id)).collect();
                             if panels.is_empty() {
                                 ui.label(crate::tl!("No ribbon panels are visible"));
                                 if ui.button(crate::tl!("Restore Ribbon")).clicked() {
@@ -729,7 +791,7 @@ pub fn show(app: &mut CadApp, ui: &mut egui::Ui) {
                                 }
                             }
                             for panel in panels {
-                                ui.push_id((tab.id, panel.id), |ui| show_panel(app, ui, panel, titles, &mut context, &mut clicked));
+                                ui.push_id((tab.id, panel.id), |ui| show_panel(app, ui, tab.id, panel, titles, &mut clicked));
                             }
                         } else if ui.button(crate::tl!("Restore Ribbon")).clicked() {
                             let _ = app.run("ui.ribbon.reset", json!({}));
@@ -739,6 +801,7 @@ pub fn show(app: &mut CadApp, ui: &mut egui::Ui) {
             }
             context.context_menu(|ui| customize(app, ui));
         });
+    floating::show(app, ui.ctx(), &mut clicked);
     if let Some(command) = clicked {
         egui::Popup::close_all(ui.ctx());
         app.start(command);
@@ -751,11 +814,12 @@ fn flyout(app: &mut CadApp, ui: &mut egui::Ui, tab: &Tab, panel: Option<&str>, c
         // Recompute on every opening/resize instead of retaining the generic popup width.
         ui.set_width(width);
     }
-    let mut context = ui.interact(ui.max_rect(), ui.id().with("flyout_context"), Sense::CLICK);
+    let context = ui.interact(ui.max_rect(), ui.id().with("flyout_context"), Sense::CLICK);
     egui::ScrollArea::horizontal().id_salt(("ribbon_flyout", tab.id, panel)).max_width(width).show(ui, |ui| {
         ui.horizontal_top(|ui| {
-            for panel in tab.panels.iter().filter(|p| panel.is_none_or(|id| id == p.id) && app.ui.ribbon.panel_visible(tab.id, p.id)) {
-                ui.push_id((tab.id, panel.id), |ui| show_panel(app, ui, panel, app.ui.ribbon.show_titles, &mut context, clicked));
+            let panels: Vec<_> = tab.panels.iter().filter(|p| panel.is_none_or(|id| id == p.id) && app.ui.ribbon.docked(tab.id, p.id)).collect();
+            for panel in panels {
+                ui.push_id((tab.id, panel.id), |ui| show_panel(app, ui, tab.id, panel, app.ui.ribbon.show_titles, clicked));
             }
         });
     });
@@ -768,7 +832,7 @@ mod tests {
     #[test]
     fn enabled_ribbon_actions_resolve_and_legacy_modeling_placeholders_stay_disabled() {
         let app = CadApp::new(cadcraft_engine::Session::default(), crate::Services::default());
-        for tab in TABS {
+        for tab in TABS.iter().chain(context::TABS) {
             for panel in tab.panels {
                 let tools = tools(panel);
                 assert!(!tools.is_empty(), "{}.{}", tab.id, panel.id);
