@@ -68,3 +68,28 @@ catalog; it does not add a 3D modeling kernel. Public behavior references:
 [AutoCAD 2027 ribbon](https://help.autodesk.com/cloudhelp/2027/ENU/AutoCAD-LT/files/GUID-D20EF1D7-4135-48A7-B68E-65BF3BFF3D70.htm).
 [Palette docking](https://help.autodesk.com/view/ACD/2027/ENU/?caas=caas%2Fdocumentation%2FACD%2F2014%2FENU%2Ffiles%2FGUID-893A3C0A-C735-49E4-878E-C8641DEAD618-htm.html).
 [Palette auto-hide/display properties](https://help.autodesk.com/view/ACD/2027/ENU/?caas=caas%2Fdocumentation%2FACD%2F2014%2FENU%2Ffiles%2FGUID-FCA90242-7748-482B-BA16-E70C7511F468-htm.html).
+
+## Ribbon display-state comparison follow-up
+
+Reference: AutoCAD 2027's ribbon display menu was observed on Windows without editing the
+open drawing or changing its workspace preferences. Public
+[display-state documentation](https://help.autodesk.com/cloudhelp/2027/ENU/AutoCAD-LT/files/GUID-627FCA86-38B1-404B-BB09-9FC3348B54F2.htm)
+supports the selected minimize modes and cycle order. CADCraft retains its own icons and code.
+
+| ID | Trigger and resulting behavior | Main files | Validation |
+|---|---|---|---|
+| CC-021 | Only tabs-only minimization existed. Add panel-title and panel-button presentations, the full display cycle and a dedicated display menu. Keep the prior minimized boolean and tabs-only defaults compatible; persist the preferred mode and cycle position. Include reference translations. | `ribbon.rs`, `menus.rs`, `i18n/uk.tsv`, native workspace save/reload test | Mode geometry, cycle order, hidden-panel retention, legacy defaults and native settings round-trip. |
+| CC-022 | Collapsed tools required permanently expanding the ribbon. Add temporary tab and panel flyouts using the same tools, visibility and command routing; dismiss on Escape, outside clicks or tool invocation. Full-tab flyouts use the available window width instead of the generic popup width; single-panel flyouts stay compact. Compact panel buttons and chevrons use CADCraft's existing drawn icons, avoiding missing-font triangle glyphs. | `ribbon.rs`, `tests/ribbon.rs`; protocol and parity docs | Tool dispatch without persistent expansion, single-panel contents and dismissal tests; native visual check. |
+| CC-023 | Auto-hide used a different body identity from normal docking, risking lost editor focus/selection and scroll state on pinning. Use the docking renderer's stable panel body identity in hover views. | `docking/auto_hide.rs`, `tests/palette_auto_hide.rs` | QuickCalc editor identity retained across floating, auto-hide and pinning. |
+| CC-024 | An explicitly invalid tab in panel configuration silently fell back to the active tab. Reject invalid or incorrectly typed tab IDs and unknown display modes atomically. | `ribbon.rs`, `tests/ribbon.rs` | Preferences remain unchanged after malformed requests; out-of-range cycle state rejected. |
+
+Validation on Windows, 2026-10-24: all six `cargo xtask ci` steps passed (fmt, Clippy,
+tests, assets, layering, wasm); 2,288 tests passed with no failures or ignored tests.
+The focused ribbon/palette suites passed all 24 interaction tests, and
+`cargo build --workspace --bins --locked -j 4` passed. Native checks confirmed compact
+panel icons/chevrons, single-panel and full-width tab flyouts, narrow-window scrolling,
+tool dispatch without an accidental canvas point or drawing modification, unchanged
+canvas geometry while flyouts open, and display settings retained after restart.
+The wasm check emitted three existing dead-code warnings in canvas rebuild code.
+Remaining gaps include floating ribbon panels, authored layouts, contextual object tabs and
+native OS palette windows. This follow-up does not add unsupported modeling commands.

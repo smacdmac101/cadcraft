@@ -194,7 +194,9 @@ pub(super) fn show(content: &mut Content<'_>, ui: &mut egui::Ui, workspace: &Wor
                         header.context_menu(|ui| title_menu(content, ui, panel, flyout));
                         ui.separator();
                         let body = ui.available_rect_before_wrap();
-                        ui.scope_builder(egui::UiBuilder::new().id_salt(("palette", panel)).max_rect(body), |ui| content.body(ui, &panel));
+                        ui.scope_builder(egui::UiBuilder::new().id(egui::Id::new("cadcraft-docking").with(("body", panel))).max_rect(body), |ui| {
+                            content.body(ui, &panel)
+                        });
                     });
                 },
             );

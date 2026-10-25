@@ -201,7 +201,8 @@ as the examples above. They change the saved UI workspace and do not edit drawin
 | `ui.toggle.ribbon` | `{on?: bool}` | Set visibility, or toggle it when omitted. |
 | `ui.ribbon.tab` | `{tab, visible?: bool}` | With `visible`, show/hide the tab; otherwise select and reveal it. |
 | `ui.ribbon.panel` | `{tab?: active tab, panel, visible?: bool}` | Show/hide a panel within that tab; omitted `visible` toggles it. |
-| `ui.ribbon.options` | `{minimized?: bool, titles?: bool}` | Configure panel expansion and title visibility. |
+| `ui.ribbon.options` | `{minimized?: bool, titles?: bool, minimizeMode?: "tabs"\|"panelTitles"\|"panelButtons"\|"cycle"}` | Configure panel expansion, compact presentation and title visibility. |
+| `ui.ribbon.cycle` | `{}` | Toggle the chosen minimize mode, or cycle Full → Panel Buttons → Panel Titles → Tabs → Full when `cycle` is selected. |
 | `ui.ribbon.reset` | `{}` | Show and restore the default drafting ribbon; Modeling remains available through Show Tabs or moving the Modeling tool set. |
 
 Drafting tab IDs are `home`, `insert`, `annotate`, `parametric`, `view`, `manage`, `output`.
@@ -217,6 +218,13 @@ the palette's previous placement, including a floating position. Modeling is an 
 the Modeling tool set. Both views use the same tool definitions and `hiddenTools` preferences;
 `ui.toolsets.tools.reset {}` clears those per-tool visibility choices. Existing workspace files
 retain their palette presentation until the ribbon is selected.
+
+Collapsed tab clicks expose temporary tool flyouts; compact panel titles/buttons expose only
+their own panel. Full-tab flyouts use the available window width and scroll when needed.
+Escape, outside clicks or invoking a tool dismiss the flyout while retaining
+the saved minimized state. Flyouts are transient and do not resize the drawing viewport.
+`ribbon.minimizeMode` and the bounded `cyclePosition` are saved with the native workspace;
+older settings keep their existing tabs-only minimized presentation.
 
 `ui.dock {operation:"autoHide", panel, enabled:bool}` sets a palette's saved auto-hide choice.
 It is separate from closing the palette: closed palettes have no hover target, and reopening

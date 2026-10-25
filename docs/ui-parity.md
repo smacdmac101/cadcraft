@@ -158,7 +158,7 @@ down-arrow options menu (DYNPROMPT), and DYNDIM.
 |---|---|---|
 | Menu bar | 11 menus, 491 leaf items | same 11 menus; 245/491 items covered (233 by `cargo xtask parity`, which counts engine commands only, plus 12 UI-only items: see [parity-checklist.md](parity-checklist.md)); once a menu is open, pointing at another title opens that menu (#1567) |
 | Tool Bar, File tabs, Start tab, layout tabs | yes | yes; compact quick access while the ribbon is shown, full classic toolbar with RIBBONCLOSE. Its overflow and saved group choices remain available. |
-| Ribbon tabs and tool panels | yes | Home, Insert, Annotate, Parametric, View, Manage and Output tabs, plus an optional Modeling tab; named panels with primary/secondary tools and overflow. Move to Ribbon transfers Tool Sets into this presentation; Move to Tool Sets restores the palette. Both use the original command catalogs and shared tool visibility. Right-click tabs, tools or background for Show Tabs/Show Panels. Choices, titles and minimization are saved; Restore Ribbon and the Panels/Window menus recover hidden controls. Floating ribbon panels, authored layouts and contextual object tabs remain open. |
+| Ribbon tabs and tool panels | yes | Home, Insert, Annotate, Parametric, View, Manage and Output tabs, plus an optional Modeling tab; named panels with primary/secondary tools and overflow. Move to Ribbon transfers Tool Sets into this presentation; Move to Tool Sets restores the palette. Both use the original command catalogs and shared tool visibility. Right-click tabs, tools or background for Show Tabs/Show Panels. Choices, titles and display modes are saved; compact tab/panel flyouts provide temporary access. Restore Ribbon and the Panels/Window menus recover hidden controls. Floating ribbon panels, authored layouts and contextual object tabs remain open. |
 | Palette docking and auto-hide | title-bar menu, docking, anchoring and hover expansion | Every side-panel title menu has Dock Left/Right, Float and Auto-hide. Floating palettes also have explicit dock header buttons. Auto-hide retains edge tabs when docked or title bars when floating; hover opens an overlay, leaving closes it, and Keep Open pins the palette. Tool Sets alone has Move to Ribbon in its right-click menu. Width, placement and auto-hide choices are saved. Floating palettes stay inside the CADCraft window; native palette windows, docking locks and floating ribbon panels remain open work. |
 | Tool Sets palette (Drafting, Modeling, … with flyouts) | yes | yes for 2D groups |
 | Properties Inspector, Quick Properties | yes | yes (every control acts or is visibly unavailable, #182); a single block reference exposes editable attribute values and read-only Position X/Y/Z; coordinate editing is still missing |
@@ -203,7 +203,10 @@ The toolbar visibility pass addresses the reported missing right-click menu. Aut
 include checked panel visibility. CADCraft now offers the equivalent choice for its existing
 top tool groups, including restoration after hiding all groups (CC-009). This update adds
 the tabbed ribbon, per-tab panel choices, panel titles and an explicit minimized state
-(CC-013–CC-017). Floating tool panels and AutoCAD's temporary minimized flyouts remain gaps.
+(CC-013–CC-017). The follow-up adds saved tabs, panel-title and panel-button minimize modes,
+the display cycle, and temporary tab/panel flyouts (CC-021–CC-022). Floating ribbon panels
+remain a gap. The minimize choices were observed in AutoCAD 2027 on Windows and checked
+against the public [display-state reference](https://help.autodesk.com/cloudhelp/2027/ENU/AutoCAD-LT/files/GUID-627FCA86-38B1-404B-BB09-9FC3348B54F2.htm).
 
 Ribbon acceptance: select Annotate and start DIMLINEAR from its Dimensions panel; right-click a
 command button and hide Draw; verify that hiding Block on Home does not hide it on Insert;
@@ -251,6 +254,7 @@ the public [docking reference](https://help.autodesk.com/view/ACD/2027/ENU/?caas
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-24 | minor | CC-021–CC-024: ribbon display modes and temporary flyouts, saved display cycling, stable palette editor identities and strict panel-tab validation. |
 | 2026-10-24 | major | CC-013–CC-017: tabbed ribbon, per-tab panel visibility, saved customization, minimization and recovery; compact quick-access toolbar and command/interaction coverage. |
 | 2026-10-24 | minor | CC-018–CC-019: palette redocking controls, preserved width/placement, shared Tool Sets/ribbon presentation and tool visibility; compatible opt-in migration. |
 | 2026-10-24 | minor | CC-020: consistent palette title menus, Tool Sets-only ribbon action, saved hover auto-hide for docked and floating palettes and Keep Open recovery. |

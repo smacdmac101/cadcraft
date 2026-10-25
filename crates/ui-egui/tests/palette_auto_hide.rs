@@ -4,7 +4,10 @@ use cadcraft_ui_egui::{
     docking::{self, Panel},
 };
 use egui::{Event, Modifiers, PointerButton, accesskit::Role, pos2, vec2};
-use egui_kittest::{Harness, kittest::Queryable};
+use egui_kittest::{
+    Harness,
+    kittest::{NodeT, Queryable},
+};
 use serde_json::json;
 
 fn harness() -> Harness<'static, CadApp> {
@@ -179,4 +182,22 @@ fn idle_auto_hide_schedules_the_frame_that_removes_the_flyout() {
         previous_delay = h.output().viewport_output.get(&egui::ViewportId::ROOT).unwrap().repaint_delay;
     }
     panic!("auto-hide did not close");
+}
+
+#[test]
+fn palette_editor_identity_survives_auto_hide_and_pinning() {
+    let mut h = harness();
+    h.state_mut().ui.show_palettes = false;
+    h.state_mut().ui.show_toolsets = false;
+    h.state_mut().run("ui.dock", json!({"operation":"open","panel":"quickCalc"})).unwrap();
+    h.state_mut().run("ui.dock", json!({"operation":"float","panel":"quickCalc","rect":[350,100,300,500]})).unwrap();
+    h.run_steps(5);
+    let original = h.query_all_by_role(Role::TextInput).next().unwrap().accesskit_node().id();
+    h.state_mut().run("ui.dock", json!({"operation":"autoHide","panel":"quickCalc","enabled":true})).unwrap();
+    h.state_mut().run("ui.dock", json!({"operation":"open","panel":"quickCalc"})).unwrap();
+    h.run_steps(5);
+    assert_eq!(h.query_all_by_role(Role::TextInput).next().unwrap().accesskit_node().id(), original);
+    h.get_by_label("Keep Open").click();
+    h.run_steps(5);
+    assert_eq!(h.query_all_by_role(Role::TextInput).next().unwrap().accesskit_node().id(), original);
 }

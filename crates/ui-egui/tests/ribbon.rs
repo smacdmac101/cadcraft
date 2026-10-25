@@ -81,6 +81,133 @@ fn minimized_ribbon_and_classic_mode_remain_recoverable() {
 }
 
 #[test]
+fn minimized_tabs_open_temporary_tools_and_dispatch_without_expanding_the_ribbon() {
+    let mut h = harness(1600.0);
+    h.state_mut().run("ui.ribbon.options", json!({"minimized":true})).unwrap();
+    h.run_steps(3);
+    h.get_by_label("Ribbon Tab: Annotate").click();
+    h.run_steps(5);
+    h.get_by_label("Ribbon / Dimensions: Linear").click();
+    h.run_steps(5);
+    assert_eq!(h.state().session.running.as_ref().unwrap().id, "dimlinear");
+    assert!(h.state().ui.ribbon.minimized);
+    assert!(h.query_by_label("Ribbon / Dimensions: Linear").is_none());
+}
+
+#[test]
+fn compact_panel_titles_and_buttons_open_only_their_panel_and_escape_dismisses() {
+    for mode in ["panelTitles", "panelButtons"] {
+        let mut h = harness(700.0);
+        h.state_mut().run("ui.ribbon.options", json!({"minimized":true,"minimizeMode":mode})).unwrap();
+        h.run_steps(3);
+        h.get_by_label("Ribbon Panel: Draw").click();
+        h.run_steps(5);
+        h.get_by_label("Ribbon / Draw: Line");
+        assert!(h.query_by_label("Ribbon / Modify: Move").is_none());
+        h.key_press(Key::Escape);
+        h.run_steps(3);
+        assert!(h.query_by_label("Ribbon / Draw: Line").is_none());
+        assert!(h.state().ui.ribbon.minimized);
+    }
+}
+
+#[test]
+fn ribbon_display_cycle_persists_and_preserves_hidden_panels_and_drawing() {
+    let mut h = harness(1600.0);
+    h.state_mut().run("ui.ribbon.options", json!({"minimizeMode":"cycle"})).unwrap();
+    h.state_mut().run("ui.ribbon.panel", json!({"tab":"home","panel":"block","visible":false})).unwrap();
+    let dirty = h.state().session.state().unwrap().is_dirty();
+    for (minimized, position) in [(true, 0), (true, 1), (true, 2), (false, 0)] {
+        h.state_mut().run("ui.ribbon.cycle", json!({})).unwrap();
+        h.run_steps(3);
+        assert_eq!(h.state().ui.ribbon.minimized, minimized);
+        assert_eq!(h.state().ui.ribbon.cycle_position, position);
+        assert!(!h.state().ui.ribbon.panel_visible("home", "block"));
+        let saved = serde_json::to_value(&h.state().ui).unwrap();
+        let restored: cadcraft_ui_egui::UiState = serde_json::from_value(saved).unwrap();
+        assert_eq!(restored.ribbon, h.state().ui.ribbon);
+    }
+    assert_eq!(h.state().session.state().unwrap().is_dirty(), dirty);
+}
+
+#[test]
+fn malformed_display_and_panel_tab_parameters_do_not_change_preferences() {
+    let mut h = harness(1600.0);
+    let before = h.state().ui.ribbon.clone();
+    for (command, params) in [
+        ("ui.ribbon.options", json!({"minimizeMode":"unknown","minimized":true})),
+        ("ui.ribbon.options", json!({"minimizeMode":123})),
+        ("ui.ribbon.panel", json!({"tab":"missing","panel":"draw","visible":false})),
+        ("ui.ribbon.panel", json!({"tab":123,"panel":"draw","visible":false})),
+    ] {
+        assert!(h.state_mut().run(command, params).is_err());
+        assert_eq!(h.state().ui.ribbon, before);
+    }
+    let mut invalid = before;
+    invalid.cycle_position = 3;
+    assert!(invalid.validate().is_err());
+}
+
+#[test]
+fn display_menu_selects_compact_titles_and_outside_click_dismisses_the_flyout() {
+    let mut h = harness(1600.0);
+    h.get_by_label("Ribbon Display").click();
+    h.run_steps(3);
+    h.get_by_label("Minimize to Panel Titles").click();
+    h.run_steps(3);
+    assert_eq!(h.state().ui.ribbon.minimize_mode, ribbon::MinimizeMode::PanelTitles);
+    assert!(h.state().ui.ribbon.minimized);
+    h.get_by_label("Ribbon Panel: Draw").click();
+    h.run_steps(3);
+    h.get_by_label("Ribbon / Draw: Line");
+    let pos = egui::pos2(1200.0, 500.0);
+    h.event(egui::Event::PointerMoved(pos));
+    for pressed in [true, false] {
+        h.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE });
+        h.run_steps(3);
+    }
+    assert!(h.query_by_label("Ribbon / Draw: Line").is_none());
+    assert!(h.state().session.running.is_none());
+}
+
+#[test]
+fn a_temporary_tool_click_does_not_pick_a_point_in_the_canvas_underneath() {
+    let mut app = CadApp::new(Session::default(), Services::default());
+    app.run("new", json!({})).unwrap();
+    app.run("ribbon", json!({})).unwrap();
+    app.run("ui.ribbon.options", json!({"minimized":true})).unwrap();
+    let dirty = app.session.state().unwrap().is_dirty();
+    let mut h = Harness::builder().with_size(vec2(1600.0, 1000.0)).build_ui_state(
+        |ui, app| {
+            app.logic(ui.ctx());
+            app.ui(ui);
+        },
+        app,
+    );
+    h.run_steps(5);
+    h.get_by_label("Ribbon Tab: Home").click();
+    h.run_steps(5);
+    h.get_by_label("Ribbon / Draw: Line").click();
+    h.run_steps(5);
+    assert!(h.state().session.prompt_text().starts_with("LINE Specify first point"), "{}", h.state().session.prompt_text());
+    assert_eq!(h.state().session.state().unwrap().is_dirty(), dirty);
+    assert!(h.state().ui.ribbon.minimized);
+}
+
+#[test]
+fn a_full_tab_flyout_uses_available_width_instead_of_the_generic_popup_width() {
+    let mut h = harness(1600.0);
+    h.state_mut().run("ui.ribbon.options", json!({"minimized":true})).unwrap();
+    h.run_steps(3);
+    h.get_by_label("Ribbon Tab: Home").click();
+    h.run_steps(5);
+    let first = h.get_by_label("Ribbon / Draw: Line").rect();
+    let last = h.get_by_label("Ribbon / Clipboard: Copy").rect();
+    assert!(last.center().x > 1200.0 && last.right() <= 1600.0, "{last:?}");
+    assert!((first.top() - last.top()).abs() < 1.0);
+}
+
+#[test]
 fn panel_geometry_stays_in_one_row_with_every_home_panel_reachable() {
     let h = harness(1600.0);
     let labels = [

@@ -234,6 +234,8 @@ mod tests {
         ui.ribbon.hidden_panels = vec!["home.draw".into()];
         ui.ribbon.hidden_tabs = vec!["output".into()];
         ui.ribbon.minimized = true;
+        ui.ribbon.minimize_mode = cadcraft_ui_egui::ribbon::MinimizeMode::Cycle;
+        ui.ribbon.cycle_position = 1;
         ui.docking.auto_hide = vec![cadcraft_ui_egui::docking::Panel::Properties];
         first.save_if_changed(&ui).unwrap();
         let bytes = fs::read(&path).unwrap();

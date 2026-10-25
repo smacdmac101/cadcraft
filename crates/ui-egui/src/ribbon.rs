@@ -210,6 +210,26 @@ pub(crate) fn tools(panel: &Panel) -> Vec<Tool> {
     result
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum MinimizeMode {
+    #[default]
+    Tabs,
+    PanelTitles,
+    PanelButtons,
+    Cycle,
+}
+impl MinimizeMode {
+    fn id(self) -> &'static str {
+        match self {
+            Self::Tabs => "tabs",
+            Self::PanelTitles => "panelTitles",
+            Self::PanelButtons => "panelButtons",
+            Self::Cycle => "cycle",
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct State {
@@ -218,16 +238,27 @@ pub struct State {
     /// Qualified IDs (for example home.draw), so a shared panel can differ between tabs.
     pub hidden_panels: Vec<String>,
     pub minimized: bool,
+    pub minimize_mode: MinimizeMode,
+    pub cycle_position: u8,
     pub show_titles: bool,
 }
 impl Default for State {
     fn default() -> Self {
-        Self { active_tab: "home".into(), hidden_tabs: vec!["modeling".into()], hidden_panels: Vec::new(), minimized: false, show_titles: true }
+        Self {
+            active_tab: "home".into(),
+            hidden_tabs: vec!["modeling".into()],
+            hidden_panels: Vec::new(),
+            minimized: false,
+            minimize_mode: MinimizeMode::Tabs,
+            cycle_position: 0,
+            show_titles: true,
+        }
     }
 }
 impl State {
     pub fn validate(&self) -> Result<(), String> {
-        if self.hidden_tabs.len() > TABS.len()
+        if self.cycle_position > 2
+            || self.hidden_tabs.len() > TABS.len()
             || self.hidden_panels.len() > 64
             || tab(&self.active_tab).is_none()
             || self.hidden_tabs.iter().any(|id| tab(id).is_none())
@@ -245,6 +276,14 @@ impl State {
     }
     fn active(&self) -> Option<&'static Tab> {
         tab(&self.active_tab).filter(|t| self.tab_visible(t.id)).or_else(|| TABS.iter().find(|t| self.tab_visible(t.id)))
+    }
+    fn compact_mode(&self) -> MinimizeMode {
+        match (self.minimize_mode, self.cycle_position) {
+            (MinimizeMode::Cycle, 0) => MinimizeMode::PanelButtons,
+            (MinimizeMode::Cycle, 1) => MinimizeMode::PanelTitles,
+            (MinimizeMode::Cycle, _) => MinimizeMode::Tabs,
+            (mode, _) => mode,
+        }
     }
 }
 fn tab(id: &str) -> Option<&'static Tab> {
@@ -264,6 +303,7 @@ pub(crate) fn route(app: &mut CadApp, id: &str, p: &Value) -> Option<Result<Valu
             | "ui.ribbon.panel"
             | "ui.ribbon.options"
             | "ui.ribbon.reset"
+            | "ui.ribbon.cycle"
             | "ui.toggle.ribbon"
             | "ribbon"
             | "ribbonclose"
@@ -334,7 +374,10 @@ fn configure(app: &mut CadApp, id: &str, p: &Value) -> Result<Value, String> {
             }
         }
         "ui.ribbon.panel" => {
-            let t = p.get("tab").and_then(Value::as_str).and_then(tab).or_else(|| next.active()).ok_or("Select a ribbon tab first")?;
+            let t = match p.get("tab") {
+                Some(value) => value.as_str().and_then(tab).ok_or("Unknown ribbon tab")?,
+                None => next.active().ok_or("Select a ribbon tab first")?,
+            };
             let panel =
                 p.get("panel").and_then(Value::as_str).and_then(|id| t.panels.iter().find(|panel| panel.id == id)).ok_or("Unknown ribbon panel")?;
             let visible = bool_param(p, "visible", !next.panel_visible(t.id, panel.id))?;
@@ -343,6 +386,18 @@ fn configure(app: &mut CadApp, id: &str, p: &Value) -> Result<Value, String> {
         "ui.ribbon.options" => {
             next.minimized = bool_param(p, "minimized", next.minimized)?;
             next.show_titles = bool_param(p, "titles", next.show_titles)?;
+            if let Some(mode) = p.get("minimizeMode") {
+                next.minimize_mode = serde_json::from_value(mode.clone()).map_err(|_| "Unknown ribbon minimize mode")?;
+                next.cycle_position = 0;
+            }
+        }
+        "ui.ribbon.cycle" => {
+            if next.minimize_mode == MinimizeMode::Cycle && next.minimized && next.cycle_position < 2 {
+                next.cycle_position += 1;
+            } else {
+                next.minimized = !next.minimized;
+                next.cycle_position = 0;
+            }
         }
         _ => {}
     }
@@ -383,6 +438,7 @@ pub(crate) fn customize(app: &mut CadApp, ui: &mut egui::Ui) {
     if ui.checkbox(&mut minimized, crate::tl!("Minimize Ribbon")).changed() {
         let _ = app.run("ui.ribbon.options", json!({"minimized":minimized}));
     }
+    display_menu(app, ui);
     let mut titles = app.ui.ribbon.show_titles;
     if ui.checkbox(&mut titles, crate::tl!("Show Panel Titles")).changed() {
         let _ = app.run("ui.ribbon.options", json!({"titles":titles}));
@@ -398,6 +454,20 @@ pub(crate) fn customize(app: &mut CadApp, ui: &mut egui::Ui) {
     if ui.button(crate::tl!("Restore Ribbon")).clicked() {
         let _ = app.run("ui.ribbon.reset", json!({}));
         ui.close();
+    }
+}
+
+fn display_menu(app: &mut CadApp, ui: &mut egui::Ui) {
+    for (mode, label) in [
+        (MinimizeMode::Tabs, crate::tl!("Minimize to Tabs")),
+        (MinimizeMode::PanelTitles, crate::tl!("Minimize to Panel Titles")),
+        (MinimizeMode::PanelButtons, crate::tl!("Minimize to Panel Buttons")),
+        (MinimizeMode::Cycle, crate::tl!("Cycle Through All")),
+    ] {
+        if ui.selectable_label(app.ui.ribbon.minimize_mode == mode, label).clicked() {
+            let _ = app.run("ui.ribbon.options", json!({"minimizeMode":mode.id(),"minimized":true}));
+            ui.close();
+        }
     }
 }
 
@@ -509,10 +579,19 @@ pub fn show(app: &mut CadApp, ui: &mut egui::Ui) {
     }
     let t = Tokens::get();
     let minimized = app.ui.ribbon.minimized;
+    let compact = app.ui.ribbon.compact_mode();
     let titles = app.ui.ribbon.show_titles;
     let mut clicked = None;
     egui::Panel::top("cc_ribbon")
-        .exact_size(if minimized { 30.0 } else { 160.0 })
+        .exact_size(if !minimized {
+            160.0
+        } else {
+            match compact {
+                MinimizeMode::PanelTitles => 66.0,
+                MinimizeMode::PanelButtons => 108.0,
+                _ => 30.0,
+            }
+        })
         .frame(egui::Frame::NONE.fill(t.chrome_dark).inner_margin(egui::Margin::symmetric(6, 2)))
         .show(ui, |ui| {
             let mut context = ui.interact(ui.max_rect(), ui.id().with("ribbon_context"), Sense::CLICK);
@@ -536,6 +615,14 @@ pub fn show(app: &mut CadApp, ui: &mut egui::Ui) {
                             }
                             if response.double_clicked() {
                                 let _ = app.run("ui.ribbon.options", json!({"minimized":!minimized}));
+                                egui::Popup::close_all(ui.ctx());
+                            } else if minimized && compact == MinimizeMode::Tabs {
+                                let toggle = response.clicked().then_some(egui::SetOpenCommand::Toggle);
+                                egui::Popup::from_response(&response)
+                                    .width((ui.ctx().content_rect().width() - 24.0).max(32.0))
+                                    .open_memory(toggle)
+                                    .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+                                    .show(|ui| flyout(app, ui, tab, None, &mut clicked));
                             }
                         }
                         if app.ui.ribbon.active().is_none() {
@@ -547,15 +634,88 @@ pub fn show(app: &mut CadApp, ui: &mut egui::Ui) {
                     ui,
                     if minimized { Icon::ChevronDown } else { Icon::ChevronUp },
                     22.0,
-                    if minimized { "Expand Ribbon" } else { "Minimize Ribbon" },
+                    if app.ui.ribbon.minimize_mode == MinimizeMode::Cycle {
+                        "Cycle Ribbon Display"
+                    } else if minimized {
+                        "Expand Ribbon"
+                    } else {
+                        "Minimize Ribbon"
+                    },
                     false,
                 );
                 context |= response.clone();
                 if response.clicked() {
-                    let _ = app.run("ui.ribbon.options", json!({"minimized":!minimized}));
+                    let _ = app.run("ui.ribbon.cycle", json!({}));
+                    egui::Popup::close_all(ui.ctx());
                 }
+                let display = ui.menu_button(" ", |ui| display_menu(app, ui)).response;
+                icons::paint(ui.painter(), egui::Rect::from_center_size(display.rect.center(), vec2(12.0, 12.0)), Icon::ChevronDown, false);
+                display.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), crate::tl!("Ribbon Display")));
+                display.on_hover_text(crate::tl!("Ribbon Display"));
                 ui.menu_button(crate::tl!("Ribbon Options"), |ui| customize(app, ui));
             });
+            if minimized && matches!(compact, MinimizeMode::PanelTitles | MinimizeMode::PanelButtons) {
+                ui.separator();
+                if let Some(tab) = app.ui.ribbon.active() {
+                    egui::ScrollArea::horizontal().id_salt("compact_ribbon_panels").show(ui, |ui| {
+                        ui.horizontal_top(|ui| {
+                            let panels: Vec<_> = tab.panels.iter().filter(|p| app.ui.ribbon.panel_visible(tab.id, p.id)).collect();
+                            for panel in panels {
+                                ui.push_id((tab.id, panel.id), |ui| {
+                                    let label = crate::i18n::t(panel.label);
+                                    let response = if compact == MinimizeMode::PanelButtons {
+                                        let (rect, response) = ui.allocate_exact_size(vec2(104.0, 65.0), Sense::click());
+                                        ui.painter().rect_filled(rect, 2.0, if response.hovered() { t.control_hover } else { t.panel });
+                                        if let Some((icon, ..)) = tools(panel).first() {
+                                            icons::paint(
+                                                ui.painter(),
+                                                egui::Rect::from_center_size(rect.center_top() + vec2(0.0, 20.0), vec2(28.0, 28.0)),
+                                                *icon,
+                                                false,
+                                            );
+                                        }
+                                        ui.painter().text(
+                                            rect.center_bottom() - vec2(0.0, 12.0),
+                                            egui::Align2::CENTER_CENTER,
+                                            label,
+                                            egui::FontId::proportional(11.0),
+                                            t.text,
+                                        );
+                                        icons::paint(
+                                            ui.painter(),
+                                            egui::Rect::from_center_size(rect.right_top() + vec2(-12.0, 12.0), vec2(10.0, 10.0)),
+                                            Icon::ChevronDown,
+                                            false,
+                                        );
+                                        response
+                                    } else {
+                                        let width = ui.painter().layout_no_wrap(label.to_string(), crate::theme::body(), t.text).size().x + 32.0;
+                                        let response = ui.add_sized(vec2(width, 24.0), egui::Button::new(label));
+                                        icons::paint(
+                                            ui.painter(),
+                                            egui::Rect::from_center_size(response.rect.right_center() - vec2(9.0, 0.0), vec2(10.0, 10.0)),
+                                            Icon::ChevronDown,
+                                            false,
+                                        );
+                                        response
+                                    };
+                                    icons::describe_control(
+                                        ui,
+                                        &response,
+                                        &format!("{}: {}", crate::tl!("Ribbon Panel"), crate::i18n::t(panel.label)),
+                                        None,
+                                        false,
+                                    );
+                                    context |= response.clone();
+                                    egui::Popup::menu(&response)
+                                        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+                                        .show(|ui| flyout(app, ui, tab, Some(panel.id), &mut clicked));
+                                });
+                            }
+                        });
+                    });
+                }
+            }
             if !minimized {
                 ui.separator();
                 egui::ScrollArea::horizontal().id_salt("ribbon_panels").show(ui, |ui| {
@@ -580,8 +740,26 @@ pub fn show(app: &mut CadApp, ui: &mut egui::Ui) {
             context.context_menu(|ui| customize(app, ui));
         });
     if let Some(command) = clicked {
+        egui::Popup::close_all(ui.ctx());
         app.start(command);
     }
+}
+
+fn flyout(app: &mut CadApp, ui: &mut egui::Ui, tab: &Tab, panel: Option<&str>, clicked: &mut Option<&'static str>) {
+    let width = (ui.ctx().content_rect().width() - 24.0).max(32.0);
+    if panel.is_none() {
+        // Recompute on every opening/resize instead of retaining the generic popup width.
+        ui.set_width(width);
+    }
+    let mut context = ui.interact(ui.max_rect(), ui.id().with("flyout_context"), Sense::CLICK);
+    egui::ScrollArea::horizontal().id_salt(("ribbon_flyout", tab.id, panel)).max_width(width).show(ui, |ui| {
+        ui.horizontal_top(|ui| {
+            for panel in tab.panels.iter().filter(|p| panel.is_none_or(|id| id == p.id) && app.ui.ribbon.panel_visible(tab.id, p.id)) {
+                ui.push_id((tab.id, panel.id), |ui| show_panel(app, ui, panel, app.ui.ribbon.show_titles, &mut context, clicked));
+            }
+        });
+    });
+    context.context_menu(|ui| customize(app, ui));
 }
 
 #[cfg(test)]
