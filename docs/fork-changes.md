@@ -620,7 +620,7 @@ Text Styles opened the existing manager. Saved only the synthetic drawing outsid
 Git and restored the clean Bracket sample. Full-gate results follow below.
 
 The first full CI run stopped in the existing CLI connect_to_closed_port_fails test:
-the spawned client unexpectedly connected successfully to a released ephemeral port.
+the spawned client unexpectedly exited successfully when a connection failure was expected.
 A focused rerun passed all four connection tests without source changes. Port reuse
 is a suspected test-fixture race, not proven from the original failure (the address
 was not printed). Track deterministic port isolation as a separate reversible arc;
@@ -629,3 +629,40 @@ no connection production/test code is changed in CC-043. Rerunning the full gate
 Final validation: the unchanged full rerun passed all six cargo xtask ci gates
 (fmt, clippy, 2,351 tests with zero failures/ignored, assets, layers and WebAssembly).
 The staged inverse patch passed git apply --reverse --check before publication.
+
+## CC-044 — deterministic CLI connection-failure fixture
+
+Trigger: the first CC-043 full run intermittently failed the existing
+connect_to_closed_port_fails test because its client exited successfully. All four
+connection tests passed unchanged on rerun; the subsequent full CI also passed.
+The fixture bound and then released an ephemeral listener before starting the
+client, leaving its destination available to other tests/processes. Port reuse is
+a plausible explanation, not a proven diagnosis of that original failure.
+
+Change: the negative startup test now connects to loopback destination port zero,
+which cannot designate a listening TCP endpoint (binding to zero allocates a
+nonzero port). It sends both initialize and a drawing-edit request and asserts
+nonzero exit, no protocol replies and the connection error. The positive test
+still uses a real ephemeral listener and verifies remote request routing. This
+removes the released-port race from the negative fixture without changing the
+application's connection behavior or adding dependencies.
+
+Files: apps/cadcraft-cli/tests/mcp_connect.rs and this ledger. No UI or drawing
+behavior changes, so no replacement build or AutoCAD interaction is needed.
+Dependencies/reversal: independent of CC-043 and other UI arcs. Reverting this
+commit restores the former test fixture only; no downstream command/API changes.
+Validation results follow below.
+
+Windows endpoint check using the existing CLI build: loopback destination port zero
+returned exit 1, zero stdout bytes and connection error 10049 (address invalid in
+its context), confirming it cannot silently serve headless requests on this host.
+Focused/full-suite validation of the updated test follows below.
+
+The four connection regressions passed in 20 consecutive runs (80 test executions),
+including simultaneous positive endpoint routing and negative startup checks. Clarified
+the CC-043 failure record: the failed assertion established a successful client exit,
+not the identity of a listening server. No production code changes were needed.
+
+Final validation: all six cargo xtask ci gates passed (fmt, clippy, 2,351 tests
+with zero failures/ignored, assets, layers, WebAssembly). The inverse-patch dry run
+passed before publication. This test-only arc requires no new GUI build.
