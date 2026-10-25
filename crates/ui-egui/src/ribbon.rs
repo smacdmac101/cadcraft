@@ -14,6 +14,7 @@ mod dimstyle;
 mod floating;
 mod layer;
 mod linetype;
+mod textstyle;
 mod window;
 pub use floating::{Display as NativeDisplay, inspect as inspect_native_windows, sync_desktop as sync_native_desktop};
 pub(crate) use window::blockers as anchor_blockers;
@@ -571,7 +572,8 @@ fn show_panel(app: &mut CadApp, ui: &mut egui::Ui, tab_id: &str, panel: &Panel, 
     let layer_panel = tab_id == "home" && panel.id == "layers";
     let color_panel = tab_id == "home" && panel.id == "properties";
     let dimstyle_panel = tab_id == "annotate" && panel.id == "dimensions";
-    let inline_panel = layer_panel || color_panel || dimstyle_panel;
+    let textstyle_panel = tab_id == "annotate" && panel.id == "text";
+    let inline_panel = layer_panel || color_panel || dimstyle_panel || textstyle_panel;
     let (rect, _) = ui.allocate_exact_size(vec2(188.0, 112.0), Sense::hover());
     ui.painter().rect_filled(rect, 2.0, t.panel);
     let mut local_context = ui.interact(rect, ui.id().with("panel_context"), Sense::click());
@@ -582,6 +584,8 @@ fn show_panel(app: &mut CadApp, ui: &mut egui::Ui, tab_id: &str, panel: &Panel, 
             .scope_builder(egui::UiBuilder::new().id_salt(if layer_panel { "layer_selector" } else { "color_selector" }).max_rect(bounds), |ui| {
                 if layer_panel {
                     layer::show(app, ui, bounds.width())
+                } else if textstyle_panel {
+                    textstyle::show(app, ui, bounds.width())
                 } else if dimstyle_panel {
                     dimstyle::show(app, ui, bounds.width())
                 } else {

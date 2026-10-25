@@ -563,3 +563,69 @@ missing their empty context column. Corrected the three-column format and reran
 Restored the clean Bracket sample; both open drawings are clean and no floating
 panel or manager remains. The synthetic fixture stays outside Git. The staged
 inverse patch was checked before publication to verify this arc can be reversed.
+
+## CC-043 — selection-aware ribbon text styles
+
+Trigger: Annotate / Text lacked the reference application's inline style selector,
+and properties.set could not assign a style to existing TEXT or MTEXT.
+Live Computer Use in AutoCAD 2027 on disposable Drawing2 confirmed current style
+Standard, current selection Annotative, assignment of Standard and back to Annotative,
+and current Standard after deselection. Manage Text Styles opened a manager showing
+current Standard. Properties showed the selected MTEXT Style Annotative / Annotative
+Yes; assigning Standard changed those to Standard / No and preserved height 0.2000,
+rotation 0, contents and defined width. No Autodesk files or artwork were read/copied.
+
+Change: Annotate / Text has a bounded, sorted style list, current TEXTSTYLE without
+selection and common/blank mixed style for selected standalone TEXT/MTEXT. Assigning
+a style affects only those text entities and leaves the drawing default unchanged.
+Locked text disables assignment; unrelated-only selections cannot change the default.
+Manage Text Styles opens the existing real manager. Compact text tool buttons keep
+the original tools reachable, and selector context menus retain Float/Return behavior.
+The properties.set textStyle field validates a loaded name before edits, canonicalizes
+case, assigns TEXT/MTEXT style and adopts its annotative setting through the existing
+annotation-scale helper. Explicit annotative in the same JSON request takes precedence.
+Text content, geometry and per-object formatting remain intact. Undo/Redo and normal
+serialization use the existing command pipeline. Added original labels and Ukrainian
+translations with catalog coverage.
+
+Files: engine cmd/props.rs and tests/text_style_properties.rs; ui-egui ribbon.rs,
+ribbon/textstyle.rs, i18n catalogs/tests, tests/ribbon_textstyles.rs and
+native_ribbon_viewports.rs; this ledger, GUI inventory and UI parity journal.
+
+Dependencies/reversal: shared ribbon foundations CC-013–024/039, popup-first Escape
+CC-038 and the inline dimension layout CC-042. Revert this feature commit to remove
+only the text selector, textStyle command field, localization and tests and restore
+the earlier Text tool arrangement. Dimension/color/linetype/layer selectors and
+existing text manager remain intact. Later callers of the new textStyle field would
+need adaptation before reversal; none are currently recorded. This arc changes the
+engine command schema, so downstream integrations must stop using that field on revert.
+
+Remaining differences: original compact names rather than preview gallery; font picker,
+full text-style manager controls/preview, fixed-height and style-effect inheritance
+comparisons remain open. Attribute definitions/attached attribute text, leaders, tables
+and nested block content are intentionally separate work items; they are not rewritten
+by this control. CADCraft retains selection after assignment, while reference style
+commands cleared it in the earlier checks. Validation results follow below.
+
+Focused validation: 20 tests passed (two engine style/annotation/atomic-validation
+and DXF round-trip tests, four text-selector interaction tests, 14 native ribbon
+regressions). Windows build passed. All drawings were clean before CC-042 exited;
+no stale CADCraft process remained before CC-043 started. Computer Use verified
+current Review with existing Standard text untouched, selecting MTEXT showing Standard,
+Review assignment narrowing the visible text through its width factor, and stored
+style Review / annotative Yes with scale 1:1 while contents/position/height/width/
+rotation stayed intact. Ctrl+Z restored Standard/non-annotative text. Native Text
+panel popup fit; selection of current Standard and Return to Ribbon worked. Manage
+Text Styles opened the existing manager. Saved only the synthetic drawing outside
+Git and restored the clean Bracket sample. Full-gate results follow below.
+
+The first full CI run stopped in the existing CLI connect_to_closed_port_fails test:
+the spawned client unexpectedly connected successfully to a released ephemeral port.
+A focused rerun passed all four connection tests without source changes. Port reuse
+is a suspected test-fixture race, not proven from the original failure (the address
+was not printed). Track deterministic port isolation as a separate reversible arc;
+no connection production/test code is changed in CC-043. Rerunning the full gate.
+
+Final validation: the unchanged full rerun passed all six cargo xtask ci gates
+(fmt, clippy, 2,351 tests with zero failures/ignored, assets, layers and WebAssembly).
+The staged inverse patch passed git apply --reverse --check before publication.

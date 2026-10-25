@@ -16,7 +16,7 @@ use crate::{Accept, Input, Interactive, Prompt, Result, Session, Step};
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         CommandSpec::new("properties", "Properties", run_get).menu(&["Modify", "Properties"]).alias(&["pr", "props", "ch"]).params("{handles?} → properties of the selection").noundo(),
-        CommandSpec::new("properties.set", "Set Properties", run_set).params("{handles?, layer?, color?, linetype?, lineweight?, ltscale?, transparency?: \"ByLayer\" | \"ByBlock\" | 0..90, visible?, <geometry fields: radius, center, start, end, text, height, rotation…>; dimensions: textOverride, dimStyle, textHeight, arrowSize, dimScale, precision (per-dimension overrides)}"),
+        CommandSpec::new("properties.set", "Set Properties", run_set).params("{handles?, layer?, color?, linetype?, lineweight?, ltscale?, transparency?: \"ByLayer\" | \"ByBlock\" | 0..90, visible?, textStyle?: loaded style name (TEXT/MTEXT only), <geometry fields: radius, center, start, end, text, height, rotation…>; dimensions: textOverride, dimStyle, textHeight, arrowSize, dimScale, precision (per-dimension overrides)}"),
         CommandSpec::new("matchprop", "Match Properties", matchprop::run_matchprop)
             .menu(&["Modify", "Match Properties"])
             .alias(&["ma", "painter"])
@@ -197,6 +197,16 @@ fn run_set(s: &mut Session, p: &Value) -> Result<Value> {
             }
         })
         .transpose()?;
+    // Validate before any table/entity edit. Styles affect only standalone text objects.
+    let text_style = p
+        .get("textStyle")
+        .map(|v| {
+            let name = v.as_str().ok_or_else(|| bad("properties.set", "textStyle must be a style name"))?;
+            d.text_style(name)
+                .map(|st| (st.name.clone(), st.annotative))
+                .ok_or_else(|| bad("properties.set", format!("text style `{name}` not found")))
+        })
+        .transpose()?;
     if let Some(l) = str_param(p, "layer") {
         d.ensure_layer(l);
     }
@@ -207,6 +217,12 @@ fn run_set(s: &mut Session, p: &Value) -> Result<Value> {
     let anno_scale = d.current_anno_scale();
     for h in &hs {
         d.modify_entity(*h, |e| {
+            if let Some((_, annotative)) = &text_style
+                && matches!(&e.kind, EntityKind::Text(_) | EntityKind::MText(_))
+            {
+                cadcraft_doc::set_annotative(e, *annotative, &anno_scale);
+            }
+            // An explicit annotative property takes precedence over the style default.
             // Annotative: Yes supports the current annotation scale; No drops every scale.
             if let Some(a) = p.get("annotative").and_then(Value::as_bool) {
                 cadcraft_doc::set_annotative(e, a, &anno_scale);
@@ -285,6 +301,9 @@ fn run_set(s: &mut Session, p: &Value) -> Result<Value> {
                     }
                 }
                 EntityKind::Text(t) => {
+                    if let Some((name, _)) = &text_style {
+                        t.style.clone_from(name);
+                    }
                     if let Some(v) = str_param(p, "text") {
                         t.value = v.to_string();
                     }
@@ -307,6 +326,9 @@ fn run_set(s: &mut Session, p: &Value) -> Result<Value> {
                     }
                 }
                 EntityKind::MText(t) => {
+                    if let Some((name, _)) = &text_style {
+                        t.style.clone_from(name);
+                    }
                     if let Some(v) = str_param(p, "text") {
                         t.contents = v.replace('\n', "\\P");
                     }

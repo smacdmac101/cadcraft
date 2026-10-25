@@ -1,7 +1,7 @@
 # AutoCAD 2027 Windows GUI inventory and CADCraft work list
 
 Updated 2026-10-25. CADCraft baseline: `27403b3`; this inventory accompanies
-CC-035–CC-039. Reference: the installed AutoCAD 2027 Windows application, inspected
+CC-035–CC-043. Reference: the installed AutoCAD 2027 Windows application, inspected
 through Computer Use. This is a first-level GUI inventory and prioritized work list,
 not an exhaustive test of every nested dialog or command, and not a parity percentage.
 
@@ -17,9 +17,9 @@ no drawing was saved. CADCraft checks use the disposable Bracket sample.
 |---|---|---|---|---|
 | GI-01 | Application menu | Application button visible; nested file/recovery pages not opened in this pass | File menu, recent files and recovery commands exist (Source) | Compare nested file workflows and recovery with synthetic files; open |
 | GI-02 | Quick access | Compact New/Open/Save/Save As/Plot/Undo/Redo and Share area (Live) | File/undo groups visible; remaining commands behind overflow, group visibility only (Live/Source) | P2: individual pinning, command order and toolbar placement |
-| GI-03 | Home | Draw, Modify, Annotation, Layers, Block, Properties, Groups, Utilities, Clipboard, View (Live) | CC-039–041 add inline layer, color and linetype selectors; no inline style selectors yet (Live/Source) | P1: style selectors, full linetype manager and visual color picker; audit missing Groups access |
+| GI-03 | Home | Draw, Modify, Annotation, Layers, Block, Properties, Groups, Utilities, Clipboard, View (Live) | CC-039–041 add inline layer, color and linetype selectors; Annotate style controls tracked below (Live/Source) | P1: style selectors, full linetype manager and visual color picker; audit missing Groups access |
 | GI-04 | Insert | Block, Block Definition, Reference, Import, Data, Linking & Extraction, Location (Live) | Block, attributes, references and import commands exposed; fewer panels (Source) | P1: attribute/editor completeness; P2: data/extraction and underlay controls |
-| GI-05 | Annotate | Text/style controls, Dimensions/style controls, Centerlines, Leaders, Tables, Markup, Annotation Scaling (Live) | CC-042 adds current/selected/mixed dimension-style control; text, leaders, tables and styles retain command buttons (Source) | P1: text/leader/table style selectors and dimension preview gallery; P2: scaling and centerline grouping |
+| GI-05 | Annotate | Text/style controls, Dimensions/style controls, Centerlines, Leaders, Tables, Markup, Annotation Scaling (Live) | CC-042/043 add current/selected/mixed dimension/text-style controls and manager access; leaders/tables retain command buttons (Source) | P1: leader/table style selectors and dimension/text preview galleries; P2: scaling and centerline grouping |
 | GI-06 | Parametric | Separate Geometric, Dimensional and Manage panels (Live) | Combined Constraints panel via existing Tool Sets catalog (Source) | P2: regroup commands and expose parameters consistently; verify each command |
 | GI-07 | View | Viewport tools, named views, model viewports, review/history, palettes and interface controls (Live) | Navigation/palette/layout commands available, smaller ribbon coverage (Source) | P2: named views, explicit interface toggles and supported viewport controls |
 | GI-08 | Manage | Action recorder, customization, applications, standards, cleanup and performance (Live) | Management/inquiry commands and dialogs, no comparable full surface (Source) | P2: expose supported cleanup/alias tools; P3: recorder/standards work |
