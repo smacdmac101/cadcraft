@@ -456,7 +456,9 @@ fn panel_geometry_stays_in_one_row_with_every_home_panel_reachable() {
     let color = h.get_by_label("Ribbon Color").rect();
     assert!((color.top() - first.top()).abs() < 1.0);
     let properties = h.get_by_label("Ribbon / Properties: Properties Inspector").rect();
-    assert!(properties.top() > color.bottom() && properties.bottom() < 150.0);
+    let linetype = h.get_by_label("Ribbon Linetype").rect();
+    assert!(linetype.top() > color.bottom() && properties.top() > linetype.bottom());
+    assert!(properties.bottom() < h.get_by_role_and_label(Role::Label, "Ribbon Panel: Properties").rect().top());
     for label in labels {
         let rect = h.get_by_role_and_label(Role::Button, label).rect();
         assert!((rect.top() - first.top()).abs() < 1.0, "{label} stepped out of the panel row: {rect:?}");

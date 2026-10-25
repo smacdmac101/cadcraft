@@ -108,6 +108,7 @@ fn missing_marked_ui_literals(language: &str) -> BTreeSet<String> {
         include_str!("../ribbon/context.rs"),
         include_str!("../ribbon/layer.rs"),
         include_str!("../ribbon/color.rs"),
+        include_str!("../ribbon/linetype.rs"),
         include_str!("../docking.rs"),
         include_str!("../docking/auto_hide.rs"),
         include_str!("../cmdline.rs"),

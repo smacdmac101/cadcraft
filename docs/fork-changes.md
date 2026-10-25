@@ -445,3 +445,56 @@ Wasm retains the same three pre-existing canvas rebuild dead-code warnings. The 
 Windows executable passed on-screen current/selected/mixed/native custom-color checks.
 A fresh disposable AutoCAD Drawing2 repeated current Blue / selected ByLayer / selected
 Green / cleared-selection Blue with a synthetic line; the original drawing stayed untouched.
+
+## CC-041 — selection-aware ribbon linetype control (2026-10-25)
+
+Home / Properties gains a second inline selector for loaded linetypes, with original
+pattern previews. No selection changes CELTYPE through linetype; selected handles change
+through properties.set, leaving CELTYPE unchanged. Mixed logical types show a blank field.
+ByLayer and ByBlock remain logical values. Locked-layer selections cannot be reassigned.
+The bounded scrolling popup supports small native floating panels and loading CADCraft's
+original standard library without silently setting the loaded type current or assigning it.
+Properties Inspector and Match Properties remain below the fields; Quick Select is in the
+panel More menu. Existing panel width is unchanged, preserving the other Home panels.
+
+Reference: Computer Use in AutoCAD 2027 on fresh disposable Drawing2 with a synthetic LINE.
+No selection: choosing Continuous displayed it as the current linetype. Selecting the older
+ByLayer line displayed ByLayer. Choosing ByBlock then returning focus to the canvas committed
+the edit; after clearing selection, Continuous returned, and reselecting the line showed
+ByBlock. Choosing Other opened Linetype Manager, whose current type remained Continuous;
+its Load button opened a separate available-types list. Canceled both dialogs without loading
+or saving reference data. No private drawing or Autodesk asset was modified or committed.
+An immediate Escape while the reference linetype field retained focus canceled the pending
+choice; CADCraft currently commits a clicked choice immediately. Preview-until-focus-loss,
+full manager/filter/reload/file UI and exact dialog appearance remain follow-ups.
+
+Dependencies/reversal: uses ribbon/display foundation CC-013–024 and popup-first Escape
+protection CC-038; native verification uses CC-025/028. This Properties layout builds on
+CC-040's color-row placement: reverting CC-040 later requires adapting this layout and its
+geometry tests, or reversing CC-041 first. Its linetype module does not call the color or
+layer selector modules. The shared Layers dash painter is only made crate-visible, with
+no change to its behavior. Revert this commit to remove the linetype row, load UI and tests,
+return Quick Select to its earlier direct button, and restore CC-040's compact arrangement.
+The CC-040 color control, CC-039 Layers selector and earlier engine commands remain intact.
+Tests and final build/GUI/full-gate results follow below.
+
+Focused validation: all 58 ribbon/color/linetype/native-window tests passed, including
+scrolling a library item into view before loading it, current-vs-selected edits and Undo/Redo,
+active LINE isolation and first Escape, locked selection, Float/Return context routing,
+retained Quick Select access and bounded native popup interaction. Test-query ambiguity
+and an offscreen test click were corrected before this complete focused run.
+Windows desktop validation: the previous build exited cleanly before this executable
+opened. Computer Use confirmed DASHED as current, selected ByLayer, selected ByBlock,
+unchanged current DASHED and Undo back to ByLayer. Right-clicking the linetype selector
+opened the existing panel menu and detached Properties. Both selectors fit the native
+window. Scrolled to Load Linetype, expanded the original library and loaded CENTER;
+inspection confirmed it was loaded while the current type remained DASHED. The native
+More menu launched the real Quick Select dialog, which was canceled. An existing native
+window stacking limitation remains visible: the floating panel can overlap an in-window
+dialog; address modality/stacking in the broader native-window follow-up.
+
+Final validation: all six cargo xtask ci gates passed (fmt, clippy, tests, assets,
+layers, wasm), with 2,338 tests passed and none failed or ignored. Computer Use
+confirmed Return to Ribbon restored the Properties panel. The disposable fixture
+was saved outside the repository and the clean Bracket sample restored; both documents
+are clean. Reverse-apply validation is performed before committing this arc.

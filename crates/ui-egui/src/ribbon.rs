@@ -12,6 +12,7 @@ mod color;
 pub mod context;
 mod floating;
 mod layer;
+mod linetype;
 mod window;
 pub use floating::{Display as NativeDisplay, inspect as inspect_native_windows, sync_desktop as sync_native_desktop};
 pub(crate) use window::blockers as anchor_blockers;
@@ -584,9 +585,20 @@ fn show_panel(app: &mut CadApp, ui: &mut egui::Ui, tab_id: &str, panel: &Panel, 
             local_context |= response;
         }
     }
-    for (index, tool) in tools.iter().take(4).enumerate() {
+    if color_panel {
+        let bounds = egui::Rect::from_min_size(rect.min + vec2(4.0, 30.0), vec2(rect.width() - 8.0, 24.0));
+        if let Some(response) =
+            ui.scope_builder(egui::UiBuilder::new().id_salt("linetype_selector").max_rect(bounds), |ui| linetype::show(app, ui, bounds.width())).inner
+        {
+            local_context |= response;
+        }
+    }
+    let visible_tools = if color_panel { 2 } else { 4 };
+    for (index, tool) in tools.iter().take(visible_tools).enumerate() {
         let large = index == 0 && !inline_panel;
-        let offset = if inline_panel {
+        let offset = if color_panel {
+            vec2(4.0 + index as f32 * 92.0, 58.0)
+        } else if inline_panel {
             vec2(4.0 + (index % 2) as f32 * 92.0, 32.0 + (index / 2) as f32 * 26.0)
         } else if large {
             vec2(4.0, 4.0)
@@ -608,7 +620,7 @@ fn show_panel(app: &mut CadApp, ui: &mut egui::Ui, tab_id: &str, panel: &Panel, 
     let footer = egui::Rect::from_min_max(rect.min + vec2(4.0, 82.0), rect.max - vec2(4.0, 4.0));
     ui.scope_builder(egui::UiBuilder::new().id_salt("footer").max_rect(footer).layout(egui::Layout::left_to_right(egui::Align::Center)), |ui| {
         if titles {
-            let reserved = if tools.len() > 4 { 48.0 } else { 0.0 } + if panel.launcher.is_some() { 28.0 } else { 0.0 };
+            let reserved = if tools.len() > visible_tools { 48.0 } else { 0.0 } + if panel.launcher.is_some() { 28.0 } else { 0.0 };
             let title = ui.add_sized(
                 vec2((footer.width() - reserved).max(32.0), 22.0),
                 egui::Label::new(egui::RichText::new(crate::i18n::t(panel.label)).size(11.0)).truncate().sense(Sense::click_and_drag()),
@@ -630,9 +642,9 @@ fn show_panel(app: &mut CadApp, ui: &mut egui::Ui, tab_id: &str, panel: &Panel, 
                 )
             });
         }
-        if tools.len() > 4 {
+        if tools.len() > visible_tools {
             let more = ui.menu_button(crate::tl!("More"), |ui| {
-                for tool in tools.iter().skip(4) {
+                for tool in tools.iter().skip(visible_tools) {
                     if ui.add_enabled(enabled(app, tool.1), egui::Button::new(crate::i18n::t(tool.2))).clicked() {
                         *clicked = Some(tool.1);
                         ui.close();
