@@ -498,3 +498,68 @@ layers, wasm), with 2,338 tests passed and none failed or ignored. Computer Use
 confirmed Return to Ribbon restored the Properties panel. The disposable fixture
 was saved outside the repository and the clean Bracket sample restored; both documents
 are clean. Reverse-apply validation is performed before committing this arc.
+
+## CC-042 — Inline dimension-style control (2026-10-25)
+
+Adds a real style selector to Annotate / Dimensions. With no selection it reads
+DIMSTYLE and changes the drawing default via dimstyle.current. With selected
+DIMENSION objects it shows their common stored style, or a blank mixed value,
+and changes only those dimensions through properties.set. Non-dimension objects
+are not edited. Locked dimensions disable assignment. Manage Dimension Styles
+opens a new basic dimension-style manager; the original drawing commands remain reachable in
+the panel and More menu. The same bounded popup works in detached panels.
+
+Reference: Computer Use in AutoCAD 2027, disposable Drawing2. Annotate's dimension
+style gallery offered Standard and Annotative plus Manage Dimension Styles.
+Created an Annotative linear dimension, set current Standard, selected the
+existing dimension and saw Annotative. Changed it to Standard, reselected to
+confirm, then changed it back to Annotative. After Escape and a fresh repaint,
+the unselected field showed current Standard. No Autodesk patterns, fonts,
+assets, files or screenshots are copied into the repository.
+
+Dependencies/reversal: uses the shared ribbon foundation CC-013–024 and the
+inline-row layout introduced in CC-039, plus popup-first Escape CC-038; native
+verification uses CC-025/028. It calls existing engine commands and does not
+modify their behavior. Revert this commit to remove only this selector, its
+translations, manager routing and tests, restoring the earlier Dimensions button arrangement.
+CC-039–041 controls remain intact. No other arc currently depends on CC-042.
+
+Remaining differences: this is an original compact list rather than the reference
+thumbnail gallery; dimension-style preview tiles, full tabbed Modify/Override/Compare UI, per-dimension override UI,
+annotation scaling controls and text/leader/table-style selectors remain separate
+work. CADCraft preserves the existing selection when applying; the reference
+cleared selection after the style command. Modeless/native dialog stacking is
+tracked separately in CC-041. Validation results follow below.
+
+The manager gap was exposed by the interaction test: the existing Dimension Style
+launcher had no UI route. This arc adds routes for dimstyle, dimstyle.dimension,
+d, dst and ddim, plus a manager using the established style-manager surface.
+It lists styles, creates a named style from the current style, sets current, and
+edits text height/style, arrow size, overall/linear scale, extension offset/length
+and text gap through the existing dimstyle command. These immediate edits are
+undoable, as in the other CADCraft style managers. Programmatic JSON stays dialog-free.
+AutoCAD's live manager confirmed current Standard after the selected dimension
+was changed to Annotative; Modify exposes a larger tabbed settings editor with
+preview. That broader UI and staged OK/Cancel editing remain follow-ups.
+
+Focused validation: 54 ribbon/native/style-selector interaction tests passed
+(37 ribbon, 13 native, 4 dimension-style), plus the manager workflow test for
+alias routing, dialog-free JSON, creation, Set Current and separate Undo steps.
+The initial test API/query errors were corrected; the failed manager-opening
+assertion revealed the missing production route described above.
+Windows build passed. The prior CC-041 process exited with all drawings clean
+before CC-042 launched; no other CADCraft build remained. Computer Use verified
+current Review vs selected Standard, assignment to Review with visible text update,
+and Undo back to Standard while current remained Review. Right-click Float Panel,
+native style selection, bounded popup and Return to Ribbon all worked. The existing
+Styles launcher opened the new manager. Edited non-current Review text height
+3 to 4 using its field, verified stored height 4/current Standard, and Set Current
+changed the current style to Review. Undo restored current Standard then height 3.
+Saved only the synthetic fixture outside Git. Full-gate results follow below.
+
+Final validation: the first full run caught two newly added Ukrainian catalog rows
+missing their empty context column. Corrected the three-column format and reran
+`cargo xtask ci`: all six gates passed, 2,344 tests passed, zero failed or ignored.
+Restored the clean Bracket sample; both open drawings are clean and no floating
+panel or manager remains. The synthetic fixture stays outside Git. The staged
+inverse patch was checked before publication to verify this arc can be reversed.

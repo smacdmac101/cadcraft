@@ -289,3 +289,4 @@ the public [docking reference](https://help.autodesk.com/view/ACD/2027/ENU/?caas
 | 2026-10-24 | minor | Toolbar context menu and Panels menu expose checked tool-group visibility, Show All Tool Groups, side-panel visibility and interface bars. Tool-group choices persist in UI settings. |
 | 2026-10-25 | minor | CC-040: selection-aware ribbon color selector, inherited swatches, exact current RGB, bounded floating popup and locked-selection protection. Full Select Color dialog remains a gap. |
 | 2026-10-25 | minor | CC-041: current/selected/mixed ribbon linetypes with pattern previews and original-library loading; Quick Select retained in Properties More menu. |
+| 2026-10-25 | minor | CC-042: selection-aware Annotate dimension-style selector with manager access, locked-object guard and detached-panel support. |

@@ -429,3 +429,37 @@ fn native_ribbon_control_drag_bypasses_edge_docking() {
     }
     assert!(app.ui.ribbon.window.floating, "releasing Ctrl after the move must not dock later");
 }
+
+#[test]
+fn native_dimension_style_popup_fits_and_sets_current_without_canvas_input() {
+    let (ctx, host) = host();
+    let mut app = CadApp::new(Session::default(), Services::default());
+    app.run("new", json!({})).unwrap();
+    app.run("ribbon", json!({})).unwrap();
+    app.run("dimstyle", json!({"name":"Review","current":false})).unwrap();
+    app.run("ui.ribbon.float", json!({"tab":"annotate","panel":"dimensions"})).unwrap();
+    for _ in 0..5 {
+        frame(&ctx, &host, &mut app);
+    }
+    for label in ["Ribbon Dimension Style", "Ribbon Dimension Style / Review"] {
+        let element = elements(&mut app, &ctx, label);
+        assert_ne!(element["viewport"], format!("{:016x}", ViewportId::ROOT.0.value()));
+        let r = element["rect"].as_array().unwrap();
+        let x = r[0].as_f64().unwrap() as f32;
+        let y = r[1].as_f64().unwrap() as f32;
+        assert!(x >= 0.0 && y >= 0.0 && x + r[2].as_f64().unwrap() as f32 <= 204.0 && y + r[3].as_f64().unwrap() as f32 <= 154.0, "{label}: {r:?}");
+        let pos = egui::pos2(x + 5.0, y + 5.0);
+        for pressed in [true, false] {
+            host.borrow_mut().events = vec![
+                Event::PointerMoved(pos),
+                Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE },
+            ];
+            frame(&ctx, &host, &mut app);
+        }
+        for _ in 0..4 {
+            frame(&ctx, &host, &mut app);
+        }
+    }
+    assert_eq!(app.session.doc().unwrap().header.str("DIMSTYLE", ""), "Review");
+    assert!(app.session.doc().unwrap().model.is_empty());
+}

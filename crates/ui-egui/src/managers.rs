@@ -28,6 +28,7 @@ pub fn route(app: &mut CadApp, id: &str, params: &Value) -> Option<Result<Value,
         "linetype" | "lt" | "ltype" => "linetype",
         "ddptype" | "ptype" => "ptype",
         "style" | "st" => "textstyle",
+        "dimstyle" | "dimstyle.dimension" | "d" | "dst" | "ddim" => "dimstyle",
         "tablestyle" | "ts" => "tablestyle",
         "mleaderstyle" | "mls" => "mleaderstyle",
         "pagesetup" => "pagesetup",
@@ -49,6 +50,7 @@ pub fn dialog(app: &mut CadApp, ctx: &egui::Context, name: &str, open: &mut bool
         "linetype" => linetype(app, ctx, open),
         "ptype" => point_style(app, ctx, open),
         "textstyle" => text_style(app, ctx, open),
+        "dimstyle" => dimension_style(app, ctx, open),
         "tablestyle" => table_style(app, ctx, open),
         "mleaderstyle" => mleader_style(app, ctx, open),
         "pagesetup" => page_setup(app, ctx, open),
@@ -331,6 +333,31 @@ fn text_style(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) -> Action 
     style_manager(ctx, open, "Text Style", "style", &current, &styles)
 }
 
+fn dimension_style(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) -> Action {
+    let Ok(d) = app.session.doc() else {
+        no_drawing(ctx, "Dimension Style Manager", open);
+        return None;
+    };
+    let text_styles = d.text_styles.iter().map(|s| s.name.clone()).collect::<Vec<_>>();
+    let styles = d
+        .dim_styles
+        .iter()
+        .map(|s| Style {
+            name: s.name.clone(),
+            fields: vec![
+                Field::Num("DIMTXT", "Text height", s.text_height),
+                Field::Num("DIMASZ", "Arrowhead size", s.arrow_size),
+                Field::Num("DIMSCALE", "Overall scale", s.scale),
+                Field::Num("DIMEXO", "Extension line offset", s.ext_offset),
+                Field::Num("DIMEXE", "Extension beyond dimension line", s.ext_extend),
+                Field::Num("DIMGAP", "Text gap", s.text_gap),
+                Field::Num("DIMLFAC", "Linear scale factor", s.linear_factor),
+                Field::Choice("DIMTXSTY", "Text style", s.text_style.clone(), text_styles.clone()),
+            ],
+        })
+        .collect::<Vec<_>>();
+    style_manager(ctx, open, "Dimension Style Manager", "dimstyle", &d.header.str("DIMSTYLE", "Standard"), &styles)
+}
 fn table_style(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) -> Action {
     let Ok(d) = app.session.doc() else {
         no_drawing(ctx, "Table Style", open);

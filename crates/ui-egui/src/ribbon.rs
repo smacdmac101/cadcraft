@@ -10,6 +10,7 @@ use serde_json::{Value, json};
 
 mod color;
 pub mod context;
+mod dimstyle;
 mod floating;
 mod layer;
 mod linetype;
@@ -569,7 +570,8 @@ fn show_panel(app: &mut CadApp, ui: &mut egui::Ui, tab_id: &str, panel: &Panel, 
     let t = Tokens::get();
     let layer_panel = tab_id == "home" && panel.id == "layers";
     let color_panel = tab_id == "home" && panel.id == "properties";
-    let inline_panel = layer_panel || color_panel;
+    let dimstyle_panel = tab_id == "annotate" && panel.id == "dimensions";
+    let inline_panel = layer_panel || color_panel || dimstyle_panel;
     let (rect, _) = ui.allocate_exact_size(vec2(188.0, 112.0), Sense::hover());
     ui.painter().rect_filled(rect, 2.0, t.panel);
     let mut local_context = ui.interact(rect, ui.id().with("panel_context"), Sense::click());
@@ -578,7 +580,13 @@ fn show_panel(app: &mut CadApp, ui: &mut egui::Ui, tab_id: &str, panel: &Panel, 
         let bounds = egui::Rect::from_min_size(rect.min + vec2(4.0, 4.0), vec2(rect.width() - 8.0, 24.0));
         if let Some(response) = ui
             .scope_builder(egui::UiBuilder::new().id_salt(if layer_panel { "layer_selector" } else { "color_selector" }).max_rect(bounds), |ui| {
-                if layer_panel { layer::show(app, ui, bounds.width()) } else { color::show(app, ui, bounds.width()) }
+                if layer_panel {
+                    layer::show(app, ui, bounds.width())
+                } else if dimstyle_panel {
+                    dimstyle::show(app, ui, bounds.width())
+                } else {
+                    color::show(app, ui, bounds.width())
+                }
             })
             .inner
         {
