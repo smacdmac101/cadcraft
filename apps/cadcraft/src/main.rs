@@ -65,7 +65,27 @@ fn follow_desktop(raw: &mut egui::RawInput, desktop: Option<egui::Theme>) {
 }
 
 impl eframe::App for App {
-    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn logic(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        let displays = frame
+            .winit_window()
+            .map(|window| {
+                window
+                    .available_monitors()
+                    .map(|monitor| {
+                        let pos = monitor.position();
+                        let size = monitor.size();
+                        cadcraft_ui_egui::ribbon::NativeDisplay {
+                            rect: egui::Rect::from_min_size(
+                                egui::pos2(pos.x as f32, pos.y as f32),
+                                egui::vec2(size.width as f32, size.height as f32),
+                            ),
+                            scale: monitor.scale_factor() as f32,
+                        }
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        cadcraft_ui_egui::ribbon::sync_native_desktop(ctx, displays);
         #[cfg(target_os = "macos")]
         {
             if self.native_menu.is_none() && std::env::var_os("CADCRAFT_NO_NATIVE_MENU").is_none() {

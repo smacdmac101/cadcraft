@@ -61,6 +61,32 @@ fn detached_panel_configuration_is_atomic_unique_and_restorable() {
     assert_eq!(h.state().ui.ribbon, initial);
 }
 
+#[test]
+fn native_desktop_positions_are_atomic_distinct_from_embedded_coordinates_and_compatible() {
+    let mut h = harness(1600.0);
+    h.state_mut().run("ui.ribbon.float", json!({"panel":"draw","position":[90000,90000],"desktopPosition":[-2200,140]})).unwrap();
+    let before = h.state().ui.ribbon.clone();
+    let saved = serde_json::to_value(&before).unwrap();
+    assert_eq!(saved["floatingPanels"][0]["desktopPosition"], json!([-2200.0, 140.0]));
+    for value in [json!([1]), json!([1e200, 0]), json!([1_000_001, 0]), json!("left")] {
+        assert!(h.state_mut().run("ui.ribbon.float", json!({"panel":"draw","desktopPosition":value})).is_err());
+        assert_eq!(h.state().ui.ribbon, before);
+    }
+    // A browser fallback can constrain its own position without replacing the desktop position.
+    h.run_steps(5);
+    assert_eq!(
+        serde_json::to_value(&h.state().ui.ribbon).unwrap()["floatingPanels"][0]["desktopPosition"],
+        saved["floatingPanels"][0]["desktopPosition"]
+    );
+    h.state_mut().run("ui.ribbon.float", json!({"panel":"draw","position":[100,100]})).unwrap();
+    assert!(h.state().ui.ribbon.floating_panels[0].desktop_position.is_none());
+    let mut legacy = saved;
+    legacy["floatingPanels"][0].as_object_mut().unwrap().remove("desktopPosition");
+    let loaded: ribbon::State = serde_json::from_value(legacy).unwrap();
+    assert!(loaded.floating_panels[0].desktop_position.is_none());
+    assert!(loaded.validate().is_ok());
+}
+
 fn drag_ribbon(h: &mut Harness<'static, CadApp>, from: egui::Pos2, to: egui::Pos2) {
     h.event(egui::Event::PointerMoved(from));
     h.run_steps(2);
@@ -560,4 +586,74 @@ fn floating_tool_sets_have_working_left_and_right_dock_buttons() {
     let before = serde_json::to_value(&h.state().ui.docking).unwrap();
     assert!(h.state_mut().run("ui.dock", json!({"operation":"dock","panel":"toolSets","zone":"invalid"})).is_err());
     assert_eq!(serde_json::to_value(&h.state().ui.docking).unwrap(), before);
+}
+
+#[test]
+fn whole_ribbon_window_settings_are_atomic_persistent_and_independent_of_panels() {
+    let mut app = CadApp::new(Session::default(), Services::default());
+    let legacy: ribbon::State = serde_json::from_value(json!({"activeTab":"insert"})).unwrap();
+    assert!(!legacy.window.floating);
+    let before = app.ui.ribbon.clone();
+    for params in [
+        json!({"floating":"yes"}),
+        json!({"floating":true,"size":[20,10]}),
+        json!({"desktopPosition":[1e100,0]}),
+        json!({"size":[500]}),
+        json!({"size":[9000,400]}),
+    ] {
+        assert!(app.run("ui.ribbon.window", params).is_err());
+        assert_eq!(app.ui.ribbon, before);
+    }
+    app.run("ui.ribbon.float", json!({"panel":"draw"})).unwrap();
+    app.run("ui.ribbon.window", json!({"floating":true,"desktopPosition":[-1200,200],"size":[360,520]})).unwrap();
+    let saved = app.ui.ribbon.clone();
+    let restored: ribbon::State = serde_json::from_value(serde_json::to_value(&saved).unwrap()).unwrap();
+    assert_eq!(restored, saved);
+    app.run("ui.ribbon.window", json!({"floating":false})).unwrap();
+    assert_eq!(app.ui.ribbon.window.desktop_position, Some([-1200.0, 200.0]));
+    assert_eq!(app.ui.ribbon.floating_panels.len(), 1);
+    app.run("ui.ribbon.reset", json!({})).unwrap();
+    assert!(!app.ui.ribbon.window.floating);
+}
+
+#[test]
+fn whole_ribbon_embedded_palette_switches_tabs_and_docks_back() {
+    let mut h = harness(1600.0);
+    h.ctx.set_embed_viewports(true);
+    h.state_mut().run("ui.ribbon.window", json!({"floating":true})).unwrap();
+    h.run_steps(5);
+    assert!(h.query_by_label("Dock Ribbon").is_some());
+    assert!(
+        h.query_by_label("Ribbon / Draw: Line").is_none(),
+        "line={:?}, dock={:?}, window={:?}",
+        h.query_by_label("Ribbon / Draw: Line").map(|n| n.rect()),
+        h.get_by_label("Dock Ribbon").rect(),
+        h.state().ui.ribbon.window
+    );
+    h.get_by_label("Insert").click_secondary();
+    h.run_steps(4);
+    assert_eq!(h.state().ui.ribbon.active_tab, "insert");
+    h.key_press(Key::Escape);
+    h.run_steps(3);
+    h.get_by_label("Dock Ribbon").click();
+    h.run_steps(4);
+    assert!(!h.state().ui.ribbon.window.floating);
+    assert!(h.query_by_label("Ribbon Tab: Insert").is_some());
+}
+
+#[test]
+fn wide_floating_ribbon_preserves_minimized_tab_flyouts_and_command_dispatch() {
+    let mut h = harness(1600.0);
+    h.ctx.set_embed_viewports(true);
+    h.state_mut().run("ui.ribbon.window", json!({"floating":true,"size":[1000,300]})).unwrap();
+    h.state_mut().run("ui.ribbon.options", json!({"minimized":true,"minimizeMode":"tabs"})).unwrap();
+    h.run_steps(5);
+    assert!(h.query_by_label("Ribbon / Draw: Line").is_none());
+    h.get_by_label("Home").click();
+    h.run_steps(4);
+    h.get_by_label("Ribbon / Draw: Line").click();
+    h.run_steps(4);
+    assert!(h.state().session.prompt_text().starts_with("LINE Specify first point"));
+    assert!(h.state().ui.ribbon.minimized);
+    assert!(h.state().ui.ribbon.window.floating);
 }

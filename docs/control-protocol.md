@@ -203,7 +203,8 @@ as the examples above. They change the saved UI workspace and do not edit drawin
 | `ui.ribbon.panel` | `{tab?: active tab, panel, visible?: bool}` | Show/hide a panel within that tab; omitted `visible` toggles it. |
 | `ui.ribbon.options` | `{minimized?: bool, titles?: bool, minimizeMode?: "tabs"\|"panelTitles"\|"panelButtons"\|"cycle", contextualTabs?: bool}` | Configure panel expansion, compact presentation and title visibility. |
 | `ui.ribbon.cycle` | `{}` | Toggle the chosen minimize mode, or cycle Full → Panel Buttons → Panel Titles → Tabs → Full when `cycle` is selected. |
-| `ui.ribbon.float` | `{tab?: effective active tab, panel, position?: [x,y]}` | Detach or move a unique panel in logical window coordinates; finite bounded positions only. |
+| `ui.ribbon.window` | `{floating?: bool, desktopPosition?: [x,y]\|null, size?: [width,height]}` | Undock/dock the whole ribbon independently of detached panels; native outer position is physical desktop pixels, client size is logical points (minimum 300×220, maximum 8192 per axis). Invalid changes are atomic. |
+| `ui.ribbon.float` | `{tab?: effective active tab, panel, position?: [x,y], desktopPosition?: [x,y]\|null}` | Detach or move a unique panel; `position` is the embedded/root-relative anchor and `desktopPosition` is the native outer position in physical desktop pixels. Finite bounded positions only. |
 | `ui.ribbon.return` | `{tab?: effective active tab, panel}` or `{all:true}` | Return one or all detached panels to their original ribbon positions. |
 | `ui.ribbon.reset` | `{}` | Show and restore the default drafting ribbon; Modeling remains available through Show Tabs or moving the Modeling tool set. |
 
@@ -247,7 +248,14 @@ already closed palette is idempotent. The protected drawing view cannot be docke
 Detached panels are saved as `ui.ribbon.floatingPanels` (`tab`, `panel`, `position`), remain
 available across regular tab switches and share command visibility with the ribbon. Title drag
 and Float Panel detach; Return to Ribbon or closing the floating window returns the tools.
-They are constrained to the application window, including after resizing. RIBBONCLOSE hides
+Desktop hosts render them as separate native windows; they can be moved outside the main
+window and to other monitors. Browser/unsupported hosts keep the constrained embedded view.
+Native coordinates are stored separately in optional `desktopPosition`; older settings use
+the root client origin plus the saved logical `position` as their initial desktop anchor.
+Setting `position` explicitly reanchors the native window near the main window and clears its
+desktop placement unless `desktopPosition` is also supplied. Passing `desktopPosition:null`
+clears native placement. A saved location on a missing display is recovered to an available
+monitor; moving the main window does not move an already placed native panel. RIBBONCLOSE hides
 both the ribbon and its detached panels; reopening retains positions. Restore Ribbon clears
 detachment. A panel hidden through `ui.ribbon.panel` retains its saved floating position.
 
@@ -259,3 +267,29 @@ or switching documents restores the chosen regular tab. Users may choose a regul
 a context remains available. `contextualTabs:false` disables automatic contexts.
 Contextual floating panels are visible only while their matching context is available.
 These tabs expose existing commands; an in-place Text Editor ribbon is not implemented.
+
+### Native ribbon window diagnostics
+
+`ui.inspect.ribbonWindows` reports `embedded`, physical display rectangles and scale factors,
+and the currently registered native ribbon windows (viewport ID, title, logical `outerRect`,
+`physicalOuterRect`, native pixels per point, focused/minimized state). `ui.elements` adds a
+`viewport` ID to each observed control. Its `rect` is local to that viewport; existing synthetic
+pointer/key methods still target the main window. Use the OS window interface for child input.
+Root screenshots capture the root viewport; independent panel windows need window-specific
+capture. Native panel close returns the panel to its source slot; it does not quit CADCraft.
+A panel tool invokes the shared command and returns focus to the drawing. Application-level
+shortcuts and command-line keyboard handling also work while a panel has focus.
+Panels hide with ribbon visibility, unavailable context, or main-window minimization, and stop
+being topmost when the application loses focus. Side palettes still use their existing docking
+renderer. Native windows apply to individual ribbon panels and the whole ribbon.
+
+Right-click the ribbon or open Ribbon Options to Undock Ribbon. The complete ribbon
+then occupies one resizable desktop window, with tabs beside stacked panel flyout buttons
+in a narrow window and tabs above a horizontal tool strip when widened. Dock Ribbon or
+double-click the internal Ribbon grip to return it to the top. The grip and OS caption
+can move the window. Closing the whole-ribbon window performs RIBBONCLOSE; RIBBON restores
+the same floating arrangement. This is distinct from closing an individual panel, which
+returns that panel to its source tab. `ribbon.window` persists floating state, physical
+desktop position and logical client size; defaults preserve old docked workspaces.
+Native focus in `ribbonWindows.windows` describes each OS window; the existing focused
+widget field and synthetic input methods remain rooted in the main viewport.

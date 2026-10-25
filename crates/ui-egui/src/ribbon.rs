@@ -10,6 +10,8 @@ use serde_json::{Value, json};
 
 pub mod context;
 mod floating;
+mod window;
+pub use floating::{Display as NativeDisplay, inspect as inspect_native_windows, sync_desktop as sync_native_desktop};
 
 type Tool = (Icon, &'static str, &'static str);
 
@@ -246,6 +248,7 @@ pub struct State {
     pub show_titles: bool,
     pub contextual_tabs: bool,
     pub floating_panels: Vec<floating::FloatingPanel>,
+    pub window: window::State,
 }
 impl Default for State {
     fn default() -> Self {
@@ -259,12 +262,14 @@ impl Default for State {
             show_titles: true,
             contextual_tabs: true,
             floating_panels: Vec::new(),
+            window: window::State::default(),
         }
     }
 }
 impl State {
     pub fn validate(&self) -> Result<(), String> {
         if self.cycle_position > 2
+            || !self.window.valid()
             || !floating::valid(&self.floating_panels)
             || self.hidden_tabs.len() > TABS.len()
             || self.hidden_panels.len() > 64
@@ -320,6 +325,7 @@ pub(crate) fn route(app: &mut CadApp, id: &str, p: &Value) -> Option<Result<Valu
             | "ui.ribbon.cycle"
             | "ui.ribbon.float"
             | "ui.ribbon.return"
+            | "ui.ribbon.window"
             | "ui.toggle.ribbon"
             | "ribbon"
             | "ribbonclose"
@@ -332,6 +338,9 @@ pub(crate) fn route(app: &mut CadApp, id: &str, p: &Value) -> Option<Result<Valu
     Some(configure(app, id, p))
 }
 fn configure(app: &mut CadApp, id: &str, p: &Value) -> Result<Value, String> {
+    if id == "ui.ribbon.window" {
+        return window::configure(app, p);
+    }
     if matches!(id, "ui.ribbon.float" | "ui.ribbon.return") {
         return floating::configure(app, id, p);
     }
@@ -442,6 +451,10 @@ fn bool_param(p: &Value, key: &str, default: bool) -> Result<bool, String> {
 
 /// Shared recovery controls remain accessible from Panels even when the entire ribbon is hidden.
 pub(crate) fn customize(app: &mut CadApp, ui: &mut egui::Ui) {
+    if ui.button(if app.ui.ribbon.window.floating { crate::tl!("Dock Ribbon") } else { crate::tl!("Undock Ribbon") }).clicked() {
+        let _ = app.run("ui.ribbon.window", json!({"floating":!app.ui.ribbon.window.floating}));
+        ui.close();
+    }
     let mut shown = app.ui.show_ribbon;
     if ui.checkbox(&mut shown, crate::tl!("Ribbon")).changed() {
         let _ = app.run("ui.toggle.ribbon", json!({"on":shown}));
@@ -577,6 +590,7 @@ fn show_panel(app: &mut CadApp, ui: &mut egui::Ui, tab_id: &str, panel: &Panel, 
             local_context |= title.clone();
             title.clone().on_hover_text(crate::tl!("Drag panel title to float"));
             if title.drag_stopped()
+                && !app.ui.ribbon.floating_panels.iter().any(|p| p.tab == tab_id && p.panel == panel.id)
                 && let Some(pos) = title.interact_pointer_pos()
                 && !rect.contains(pos)
             {
@@ -631,12 +645,23 @@ fn panel_menu(app: &mut CadApp, ui: &mut egui::Ui, tab_id: &str, panel: &Panel) 
 
 pub fn show(app: &mut CadApp, ui: &mut egui::Ui) {
     if !app.ui.show_ribbon {
+        floating::clear(ui.ctx());
         return;
     }
     if app.ui.ribbon.validate().is_err() {
         app.ui.ribbon = State::default();
     }
     context::sync(app);
+    floating::clear(ui.ctx());
+    if app.ui.ribbon.window.floating {
+        let mut clicked = None;
+        window::show(app, ui.ctx(), &mut clicked);
+        if app.ui.show_ribbon {
+            floating::show(app, ui.ctx(), &mut clicked);
+        }
+        dispatch(app, ui.ctx(), clicked);
+        return;
+    }
     let t = Tokens::get();
     let minimized = app.ui.ribbon.minimized;
     let compact = app.ui.ribbon.compact_mode();
@@ -802,8 +827,12 @@ pub fn show(app: &mut CadApp, ui: &mut egui::Ui) {
             context.context_menu(|ui| customize(app, ui));
         });
     floating::show(app, ui.ctx(), &mut clicked);
+    dispatch(app, ui.ctx(), clicked);
+}
+
+fn dispatch(app: &mut CadApp, ctx: &egui::Context, clicked: Option<&'static str>) {
     if let Some(command) = clicked {
-        egui::Popup::close_all(ui.ctx());
+        egui::Popup::close_all(ctx);
         app.start(command);
     }
 }

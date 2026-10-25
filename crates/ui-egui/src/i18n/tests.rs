@@ -100,6 +100,8 @@ fn missing_marked_ui_literals(language: &str) -> BTreeSet<String> {
         include_str!("../chrome.rs"),
         include_str!("../ribbon.rs"),
         include_str!("../ribbon/floating.rs"),
+        include_str!("../ribbon/floating/native.rs"),
+        include_str!("../ribbon/window.rs"),
         include_str!("../ribbon/context.rs"),
         include_str!("../docking.rs"),
         include_str!("../docking/auto_hide.rs"),

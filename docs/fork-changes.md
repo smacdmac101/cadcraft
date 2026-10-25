@@ -124,3 +124,87 @@ emitted the same three existing dead-code warnings in canvas rebuild code.
 Scope: floating panels remain inside the application window. Native OS/second-monitor panels,
 user-authored ribbon layouts, an in-place Text Editor ribbon, and the rest of AutoCAD's
 context-specific properties/tool catalog remain gaps. No new editing engine is implied.
+
+## Native ribbon windows and multiple monitors (2026-10-25)
+
+Reference: AutoCAD 2027's public [ribbon documentation](https://help.autodesk.com/cloudhelp/2027/ENU/AutoCAD-LT/files/GUID-D20EF1D7-4135-48A7-B68E-65BF3BFF3D70.htm)
+describes detached panels on another monitor and retention across ribbon-tab changes.
+Implementation uses the existing egui/eframe immediate-viewport API and original CADCraft tools.
+No new dependency, Autodesk asset, or private drawing is included.
+
+| ID | Trigger and resulting behavior | Main files | Validation |
+|---|---|---|---|
+| CC-028 | In-app floating ribbon windows stopped at the application boundary. Use native desktop windows, with browser/unsupported-host fallback. Keep panel-qualified identities, command dispatch, keyboard shortcuts, Return to Ribbon and independent close behavior. Return focus to the drawing when a tool starts; hide with main-window minimization and lower panels when the application loses focus. Avoid re-detaching an already floating panel through its body footer. | `ribbon.rs`, `ribbon/floating.rs`, `ribbon/floating/native.rs`, desktop `main.rs` | Native callback and window lifecycle tests; Windows visual/OS checks below. |
+| CC-029 | Application-relative coordinates could not preserve second-monitor placement. Add optional physical-pixel desktop positions while retaining embedded anchors and old-settings defaults. Capture monitor geometry/scales through the existing host, translate native positions at each viewport's current DPI, recover missing-monitor locations and validate hostile coordinates atomically. Preserve native placement when the fallback view is constrained. | `ribbon/floating.rs`, `ribbon/floating/native.rs`, `apps/cadcraft/src/{main.rs,workspace.rs}`, ribbon tests | Negative coordinates, mixed scaling, shared display edges, monitor removal, malformed inputs, legacy load and native workspace round-trip. |
+| CC-030 | Native tools need identifiable coordinates and reproducible contribution evidence. Add viewport IDs to observed controls and native-window/display diagnostics to UI inspection; extend reference-translation scanning and protocol/parity records. Test the real immediate-viewport callbacks as well as fallback interactions. | `control.rs`, `i18n/tests.rs`, `tests/{native_ribbon_viewports.rs,ribbon.rs}`, `docs/{control-protocol.md,ui-parity.md,fork-changes.md}` | Native callback tool input, multiple IDs, close/hide/reopen; full checks and native evidence below. |
+
+Validation: final combined results are recorded below.
+Scope: CC-028–CC-030 concern detached ribbon panels; CC-031 adds the entire ribbon. Side palettes retain their existing in-app
+left/right/floating docking. Wayland window positioning is compositor-controlled; browser hosts
+embed panel windows. The existing remaining contextual-tool and authored-layout gaps are unchanged.
+
+
+## Whole-ribbon floating and live reference confirmation (2026-10-25)
+
+Live Computer Use observations of installed AutoCAD 2027: the Home-tab shortcut menu has
+Undock; using it removes the docked strip and opens a narrow vertical ribbon palette with
+side tabs and stacked panel buttons. Its grip menu includes Allow Docking, Anchor Left,
+Anchor Right and Auto-hide. Double-clicking the grip restores the top dock. With LOCKUI
+already 0 (queried and cancelled without changing it), dragging the Draw panel title
+also detaches that panel. Draw remains available after switching to Insert; its upper-right
+return control restores it to Home. Both floating forms therefore belong in CADCraft.
+AutoCAD was returned to Home with Draw and the whole ribbon docked; no drawing was saved.
+Screenshots were observed through Computer Use and are not committed.
+
+| ID | Trigger and resulting behavior | Main files | Validation |
+|---|---|---|---|
+| CC-031 | The whole ribbon could not float. Add Undock Ribbon/Dock Ribbon to shared shortcut/options menus and a distinct resizable native ribbon window. Narrow windows use side tabs and stacked panel flyouts; wide windows expose the horizontal tool strip. The internal grip supports native dragging and double-click docking. Close hides the whole ribbon and RIBBON reopens it; individual close continues to return its panel. Persist and validate independent desktop geometry, default old workspaces to docked, aggregate whole/panel viewport lifecycle and reuse placement/focus handling. Extend Ukrainian coverage, workspace round-trip, native callback/fallback interaction tests and protocol/UI/hardware records. | `ribbon.rs`, `ribbon/window.rs`, `ribbon/floating{.rs,/native.rs}`, `menus.rs`, `i18n/{tests.rs,uk.tsv}`, workspace/tests and parity/control documents | Atomic malformed-input tests, legacy defaults, independent detached-panel state, native close/reopen/dock, multiple viewport identities, embedded tab/dock interaction; combined results below. |
+
+Additional CC-031 regressions and presentation details:
+
+- Use a vertical layout inside the compact panel scroll area. Inheriting the outer
+  horizontal tab/panel layout clipped native buttons and expanded embedded windows into
+  a wide strip; both presentations remain resizable.
+- Wait for native position and client-size acknowledgement before saving observed geometry.
+  Sizing/discard passes can render repeatedly before Windows applies a move or shrink.
+  A bounded one-second UI-time window retries requests, then accepts host constraints.
+  Native tests delay both position and size commands and exercise subsequent user resizing.
+- A Return to Ribbon action cannot be undone by a geometry update from the same frame.
+  Record the native return control for viewport-aware automation and test that race.
+- Preserve accented contextual tabs, right-click selection of the tab being customized,
+  minimized tab flyouts and panel-title modes in the wide floating ribbon. Test flyout
+  command dispatch without expanding the ribbon.
+- Paint the entire native client background with the ribbon theme, including unused
+  space after resizing.
+
+Combined validation on Windows, 2026-10-25: all six `cargo xtask ci` steps passed
+(fmt, Clippy, tests, assets, layering, wasm); 2,310 tests passed, with no failures or
+ignored tests. All 44 focused ribbon/native-window/palette cases passed. The final
+`cargo build --workspace --bins --locked -j4` passed. Wasm emitted only the same three
+existing dead-code warnings in canvas rebuild code.
+
+Windows native checks used two physical displays (3840×2160 and 3240×2160), both at 150%.
+Individual Draw and Modify panels were independently placed on the second monitor;
+Line and overflow Arc dispatch, native caption dragging, close/return, main-window
+minimize/restore, focus-level changes and saved placement after restart were checked.
+The whole ribbon was undocked using its actual shortcut menu, returned through its grip,
+and verified in compact 360×520 and wide 1000×260 client layouts at desktop position
+[4200,250]. Repeated wide-to-compact requests retained that second-monitor position.
+Windows' native Size menu/keyboard controls changed the client width to about 370.67
+logical points and CADCraft saved that user resize. Native close hides the whole ribbon;
+RIBBON restores it, preserving independent panel behavior. Restart restored whole-ribbon
+position/size. Tool input reached the LINE first-point prompt without editing the sample.
+Checks used the Bracket sample (46 entities, clean document) in an isolated profile;
+the original project drawing was untouched.
+
+Mixed-DPI monitor layouts, negative origins, shared edges and removed-display recovery
+have synthetic regression coverage; physical monitor removal and mixed-DPI hardware were
+not tested. Other native platforms were not device-tested. Browser/unsupported hosts use
+embedded windows.
+
+Remaining reference differences: whole-ribbon edge anchoring/hover auto-hide and automatic
+edge-drag docking are not implemented in this arc; Dock Ribbon/internal-grip double-click
+restore the top strip. CADCraft uses horizontal text tabs in the vertical palette, original
+icons and its existing tool catalog, not Autodesk assets or an exact skin. Native side
+palettes, additional contexts and user-authored layouts remain gaps. This is a focused
+floating-ribbon improvement, not a full parity claim.

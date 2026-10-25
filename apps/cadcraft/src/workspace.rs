@@ -237,8 +237,13 @@ mod tests {
         ui.ribbon.minimize_mode = cadcraft_ui_egui::ribbon::MinimizeMode::Cycle;
         ui.ribbon.cycle_position = 1;
         ui.ribbon.contextual_tabs = false;
-        ui.ribbon.floating_panels =
-            serde_json::from_value(serde_json::json!([{ "tab": "home", "panel": "modify", "position": [420.0, 280.0] }])).unwrap();
+        ui.ribbon.window.floating = true;
+        ui.ribbon.window.desktop_position = Some([4200.0, 300.0]);
+        ui.ribbon.window.size = [720.0, 260.0];
+        ui.ribbon.floating_panels = serde_json::from_value(
+            serde_json::json!([{ "tab": "home", "panel": "modify", "position": [420.0, 280.0], "desktopPosition": [-2200.0, 300.0] }]),
+        )
+        .unwrap();
         ui.docking.auto_hide = vec![cadcraft_ui_egui::docking::Panel::Properties];
         first.save_if_changed(&ui).unwrap();
         let bytes = fs::read(&path).unwrap();

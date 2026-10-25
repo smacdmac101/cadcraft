@@ -1,13 +1,13 @@
 # Hardware parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-13 · **Change:** minor (zoom and pan regenerate in the background) · **Target:** Autodesk AutoCAD 2027 (Mac and Windows)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-25 · **Change:** minor (native ribbon windows across monitors) · **Target:** Autodesk AutoCAD 2027 (Mac and Windows)
 
 The hardware AutoCAD uses and how CADCraft compares, per platform. Work items:
 [gaps.md](gaps.md#hardware).
 
 **Headline (estimated): hardware ≈ 45%.** 2D GPU drawing, HiDPI and trackpads are covered on
 every platform. Missing: 3D mice, tablets/digitizers, GPU-accelerated 3D (there is no 3D), and
-any deliberate multi-monitor handling. Remaining: **≈ 15–25 Opus 5.5 hours**, plus a human with
+native side-palette windows and broader multi-monitor validation. Remaining: **≈ 15–25 Opus 5.5 hours**, plus a human with
 the devices to test 3D mice and tablets.
 
 Measured from the source on 2026-10-10 (`crates/ui-egui/src/gpu.rs`, `canvas.rs`,
@@ -21,7 +21,7 @@ requirements and graphics-performance documentation. Nothing was benchmarked in 
 | GPU for 3D (shaded visual styles, ray-traced rendering) | yes | no (no 3D) | no | no | no |
 | Low-latency presentation | yes | vsync or low-latency via `CADCRAFT_VSYNC` | same | no vsync queue so the crosshair keeps up (#183) | browser-controlled |
 | HiDPI / Retina, display scaling | yes | yes (egui points per pixel) | yes; a Windows 11 DPI fix is queued upstream (PR #110) | yes | yes |
-| Multi-monitor (palettes on other screens, per-monitor DPI) | yes | not handled deliberately; one window | same | same | — |
+| Multi-monitor (palettes on other screens, per-monitor DPI) | yes | native ribbon implementation; not device-tested | individual/whole native ribbon windows; saved physical desktop positions, per-viewport DPI conversion and missing-display recovery; two 150% monitors tested | same implementation; not device-tested, Wayland placement compositor-controlled | embedded ribbon windows |
 | Trackpad pan, pinch zoom | yes (Mac) | yes, with trackpad vs wheel detection (#58) | wheel only (precision touchpad untested) | wheel; delay reported on Linux Mint (#25) | browser events |
 | Magic Mouse | yes | treated as a trackpad | — | — | — |
 | Wheel mouse, middle-button pan | yes | yes | yes | yes | yes |
@@ -29,6 +29,11 @@ requirements and graphics-performance documentation. Nothing was benchmarked in 
 | Pen tablet / digitizer (TABLET command, calibration) | yes (Windows) | **no** | **no** | **no** | no |
 | Screen magnifier following the cursor | yes | — | breaks (#39; PR #187 adds a system-cursor option) | — | — |
 | Plotters and printers (PC3 devices, system printers) | yes | **no**: PDF/PNG/SVG files only; Print asks where to save the PDF (#26) | same | same | PDF bytes shown instead of a download (#134) |
+
+The display/ribbon row was updated on 2026-10-25 (CC-028–CC-031). Windows individual-panel and whole-ribbon
+checks used two physical displays at 150% scaling; mixed DPI, negative origins and removed
+displays have geometry regression coverage, not live device verification. Other hardware
+rows and the headline estimate retain the older review scope.
 
 ## Performance on hardware (internal numbers only)
 
@@ -48,5 +53,6 @@ next step.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-25 | minor | CC-028–CC-031: native individual and whole-ribbon windows, monitor geometry/DPI recovery, Windows two-monitor validation; other platforms remain unverified. |
 | 2026-10-13 | minor | Zoom and pan regenerate in the background: 2–4.5 s stalls down to 26–64 ms on a hatched DWG |
 | 2026-10-10 | major | First hardware parity doc: GPU backends per platform, input devices, displays, plotters |

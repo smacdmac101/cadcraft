@@ -94,6 +94,7 @@ pub enum Outcome {
 #[derive(Clone)]
 struct Widget {
     id: egui::Id,
+    viewport: egui::ViewportId,
     label: String,
     role: &'static str,
     rect: [f32; 4],
@@ -117,6 +118,7 @@ pub(crate) fn record_widget(ui: &egui::Ui, response: &egui::Response, label: &st
     }
     let widget = Widget {
         id: response.id,
+        viewport: ui.ctx().viewport_id(),
         label: label.chars().take(512).collect(),
         role,
         rect: [response.rect.left(), response.rect.top(), response.rect.width(), response.rect.height()],
@@ -126,7 +128,7 @@ pub(crate) fn record_widget(ui: &egui::Ui, response: &egui::Response, label: &st
     };
     ui.ctx().data_mut(|data| {
         let widgets = data.get_temp_mut_or_default::<Vec<Widget>>(widgets_id());
-        if let Some(previous) = widgets.iter_mut().find(|previous| previous.id == widget.id) {
+        if let Some(previous) = widgets.iter_mut().find(|previous| previous.id == widget.id && previous.viewport == widget.viewport) {
             *previous = widget;
         } else if widgets.len() < 2048 {
             widgets.push(widget);
@@ -141,6 +143,7 @@ fn widgets(ctx: &egui::Context) -> Vec<Widget> {
 fn widget_json(widget: &Widget, focused: Option<egui::Id>) -> Value {
     json!({
         "id": format!("{:016x}", widget.id.value()), "label": widget.label, "role": widget.role,
+        "viewport": format!("{:016x}", widget.viewport.0.value()),
         "rect": widget.rect, "enabled": widget.enabled, "visible": widget.visible,
         "selected": widget.selected, "focused": focused == Some(widget.id),
     })
@@ -260,6 +263,7 @@ pub fn inspect(app: &CadApp, ctx: &egui::Context) -> Value {
         "theme": if app.shown_theme() == egui::Theme::Light { "light" } else { "dark" },
         "animations": app.shows_animations(),
         "focus": focus_json(ctx),
+        "ribbonWindows": crate::ribbon::inspect_native_windows(ctx),
         "canvasRect": app.canvas.rect.map(|c| json!([c.left(), c.top(), c.width(), c.height()])),
         "window": [r.width(), r.height()],
         "view": view.map(|v| json!({"center": [v.center.x, v.center.y], "height": v.height})),
