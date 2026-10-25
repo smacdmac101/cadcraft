@@ -10,6 +10,7 @@ use serde_json::{Value, json};
 
 pub mod context;
 mod floating;
+mod layer;
 mod window;
 pub use floating::{Display as NativeDisplay, inspect as inspect_native_windows, sync_desktop as sync_native_desktop};
 pub(crate) use window::blockers as anchor_blockers;
@@ -529,10 +530,10 @@ fn display_menu(app: &mut CadApp, ui: &mut egui::Ui) {
 fn enabled(app: &CadApp, command: &str) -> bool {
     cadcraft_engine::find_command(command).map_or_else(|| crate::menus::is_ui_command(command), |c| (c.enabled)(&app.session).is_ok())
 }
-fn tool_button(ui: &mut egui::Ui, tool: Tool, large: bool, panel_label: &str) -> egui::Response {
+fn tool_button(ui: &mut egui::Ui, tool: Tool, large: bool, panel_label: &str, small_width: f32) -> egui::Response {
     let (icon, _, label) = tool;
     let t = Tokens::get();
-    let (r, response) = ui.allocate_exact_size(if large { vec2(68.0, 74.0) } else { vec2(98.0, 22.0) }, Sense::click());
+    let (r, response) = ui.allocate_exact_size(if large { vec2(68.0, 74.0) } else { vec2(small_width, 22.0) }, Sense::click());
     if response.hovered() || response.has_focus() {
         ui.painter().rect_filled(r, 3.0, t.control_hover);
     }
@@ -549,7 +550,7 @@ fn tool_button(ui: &mut egui::Ui, tool: Tool, large: bool, panel_label: &str) ->
         crate::i18n::t(label).to_string(),
         egui::FontId::proportional(12.0),
         if ui.is_enabled() { t.text } else { t.text_dim },
-        if large { 66.0 } else { 74.0 },
+        if large { 66.0 } else { small_width - 24.0 },
     );
     text.wrap.max_rows = if large { 2 } else { 1 };
     text.wrap.break_anywhere = !large;
@@ -564,17 +565,33 @@ fn tool_button(ui: &mut egui::Ui, tool: Tool, large: bool, panel_label: &str) ->
 
 fn show_panel(app: &mut CadApp, ui: &mut egui::Ui, tab_id: &str, panel: &Panel, titles: bool, clicked: &mut Option<&'static str>) {
     let t = Tokens::get();
+    let layer_panel = tab_id == "home" && panel.id == "layers";
     let (rect, _) = ui.allocate_exact_size(vec2(188.0, 112.0), Sense::hover());
     ui.painter().rect_filled(rect, 2.0, t.panel);
     let mut local_context = ui.interact(rect, ui.id().with("panel_context"), Sense::click());
     let tools: Vec<_> = tools(panel).into_iter().filter(|(_, command, _)| !app.ui.hidden_tools.iter().any(|hidden| hidden == command)).collect();
+    if layer_panel {
+        let bounds = egui::Rect::from_min_size(rect.min + vec2(4.0, 4.0), vec2(rect.width() - 8.0, 24.0));
+        if let Some(response) =
+            ui.scope_builder(egui::UiBuilder::new().id_salt("layer_selector").max_rect(bounds), |ui| layer::show(app, ui, bounds.width())).inner
+        {
+            local_context |= response;
+        }
+    }
     for (index, tool) in tools.iter().take(4).enumerate() {
-        let large = index == 0;
-        let offset = if large { vec2(4.0, 4.0) } else { vec2(80.0, 4.0 + (index - 1) as f32 * 26.0) };
-        let bounds = egui::Rect::from_min_size(rect.min + offset, if large { vec2(68.0, 74.0) } else { vec2(98.0, 22.0) });
+        let large = index == 0 && !layer_panel;
+        let offset = if layer_panel {
+            vec2(4.0 + (index % 2) as f32 * 92.0, 32.0 + (index / 2) as f32 * 26.0)
+        } else if large {
+            vec2(4.0, 4.0)
+        } else {
+            vec2(80.0, 4.0 + (index - 1) as f32 * 26.0)
+        };
+        let small_width = if layer_panel { 84.0 } else { 98.0 };
+        let bounds = egui::Rect::from_min_size(rect.min + offset, if large { vec2(68.0, 74.0) } else { vec2(small_width, 22.0) });
         let response = ui
             .scope_builder(egui::UiBuilder::new().id_salt(("tool", tool.1)).max_rect(bounds).layout(egui::Layout::top_down(egui::Align::Min)), |ui| {
-                ui.add_enabled_ui(enabled(app, tool.1), |ui| tool_button(ui, *tool, large, panel.label)).inner
+                ui.add_enabled_ui(enabled(app, tool.1), |ui| tool_button(ui, *tool, large, panel.label, small_width)).inner
             })
             .inner;
         local_context |= response.clone();

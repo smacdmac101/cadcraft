@@ -1,6 +1,6 @@
 # UI parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-25 · **Change:** major (Windows GUI inventory, Layout context and status customization) · **Target:** Autodesk AutoCAD 2027 for Mac (26.0), with the focused Windows pass below
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-25 · **Change:** minor (selection-aware ribbon layers and reversal records) · **Target:** Autodesk AutoCAD 2027 for Mac (26.0), with the focused Windows pass below
 
 How CADCraft's interaction compares with AutoCAD's: point entry, object snaps, tracking, dynamic
 input, grips, selection, the command line, chrome and navigation. A drafter's speed in AutoCAD
@@ -13,7 +13,7 @@ Extension, Parallel and Apparent Intersection snaps (#379); dynamic input is a r
 tooltip; FROM, M2P, TK and point filters don't exist; hot-grip options are advertised but
 ignored. Ribbon, palette and status shortcut menus now exist (CC-015–CC-038); broader drafting-context behavior still needs review. Remaining: **≈ 110–170 Opus 5.5 hours**.
 
-The focused [AutoCAD 2027 Windows GUI inventory](autocad-2027-gui-inventory.md) records 31 surfaces, evidence levels and follow-ups. CC-036–CC-038 add paper-space Layout tools, per-item status customization and menu Escape protection; the broader percentage below is not reassessed by this pass.
+The focused [AutoCAD 2027 Windows GUI inventory](autocad-2027-gui-inventory.md) records 31 surfaces, evidence levels and follow-ups. CC-036–CC-038 add paper-space Layout tools, per-item status customization and menu Escape protection. CC-039 adds a current/selected/mixed-layer ribbon selector with layer-state controls and independent reversal tracking; the broader percentage below is not reassessed by these passes.
 
 ## How this was measured
 
@@ -260,6 +260,7 @@ the public [docking reference](https://help.autodesk.com/view/ACD/2027/ENU/?caas
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-25 | minor | CC-039: selection-aware ribbon layer control, compact Layers actions and explicit dependency/reversal records. |
 | 2026-10-25 | minor | CC-035–CC-038: Windows GUI inventory, Layout context alongside selection contexts, persisted status visibility and menu Escape protection. |
 | 2026-10-25 | minor | CC-032–CC-034: whole-ribbon anchors, hover auto-hide, pinning and native edge-drag docking; reference observed in AutoCAD 2027 on Windows. |
 | 2026-10-25 | minor | CC-031: live AutoCAD confirmation of both floating forms; whole-ribbon desktop palette, adaptive layout, docking recovery, independent close and saved geometry. |

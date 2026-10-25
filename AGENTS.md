@@ -57,6 +57,10 @@ People trust CADCraft with their drawings; a crash loses their work. **This outr
   behavior, list the affected files and record validation evidence and remaining limitations.
 - Keep feature commits focused and include their change identifiers and validation in the
   commit body. Published earlier commits are mapped by the ledger; preserve their hashes.
+- Use one independently reversible feature arc per commit, including its tests and records.
+  Record dependencies, reversal scope and any effect on other changes in the ledger. Check
+  later dependents before a revert; adapt or reverse them first and document the interaction.
+  Historical multi-ID commits require a selective inverse patch to reverse just one ID.
 - Update the ledger and relevant parity documents in the same change. Before proposing an
   upstream PR, use these records to explain scope, reproduction and tests. Keep private drawing
   files, local credentials and Autodesk screenshots/assets out of the contribution.

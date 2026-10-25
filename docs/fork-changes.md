@@ -5,6 +5,36 @@ review. Stable change IDs identify the individual changes within a feature commi
 commit bodies list their IDs and validation; use `git log --oneline --grep=CC-013`, for example,
 to locate the implementing commit. Entries distinguish measured results from remaining gaps.
 
+## Reversal and dependency tracking
+
+From CC-039 onward, each independently useful feature arc is a separate commit containing
+its implementation, tests, translations and records. Each entry states its dependencies,
+affected behavior and reversal scope. Revert that commit as a unit, then run the quality
+gates; retain the original commit and add a reversal record rather than rewriting history.
+Before reverting, inspect later entries for dependents. A dependent must be reverted first
+or adapted and verified, and the interaction must be recorded explicitly. Sharing a file
+does not by itself mean sharing behavior; resolve textual conflicts without discarding
+unrelated later work.
+
+Earlier published history contains several IDs per commit. Those IDs are traceable but
+are **not independent Git revert units**. In particular, `9cde0cc` groups CC-001–011;
+`029d948` groups the ribbon/palette/record work CC-012–020; subsequent display/context/native/
+anchor arcs build on that ribbon foundation. `fc0c091` groups CC-035–038: reverting it
+removes the inventory, Layout context, status customization and popup Escape protection
+together. Reversing one historical ID requires a focused inverse patch with its own tests;
+do not revert its whole commit and claim the other IDs are unaffected. The compatibility
+baseline (CC-001/002/006–008) also supports later Windows builds. Published hashes are kept.
+
+| Published revert unit | IDs | Dependencies / effect on other arcs |
+|---|---|---|
+| `9cde0cc` | CC-001–011 | Windows compatibility baseline plus attribute/toolbar work. Later builds rely on the compatibility fixes; use an inverse patch for one behavior. |
+| `029d948` | CC-012–020 | Ribbon foundation and shared palette controls. Later ribbon features require this foundation. |
+| `fbc8ee1` | CC-021–024 | Display modes/flyouts, palette identity and validation. Depends on `029d948`; later ribbon rendering uses these modes. |
+| `f8dad0f` | CC-025–027 | Detached panels/contextual tabs. Depends on ribbon/display modes; native panel windows and Layout context build on it. |
+| `b3f794f` | CC-028–031 | Desktop panels/geometry/diagnostics and whole ribbon. Depends on detached panels; anchoring/edge docking uses this native-window foundation. |
+| `27403b3` | CC-032–034 | Whole-ribbon anchors, roll-up and edge docking. Depends on `b3f794f`; reverting loses those three placement behaviors together. |
+| `fc0c091` | CC-035–038 | Inventory/Layout/status/Escape. Layout depends on contextual tabs; new popup controls rely on Escape protection. Whole-commit reversal removes all four IDs. |
+
 ## Baseline and first fork update
 
 The fork started at upstream `f043540d13dac03ce895a96c78a8349f3e40bd5b`. The first published
@@ -302,3 +332,61 @@ passed 2,323 tests with zero failures and zero ignored. Wasm retained only the t
 existing dead-code warnings in canvas rebuild code. The focused 50-test run and
 `cargo build --workspace --bins --locked -j4` also passed. The initial formatting
 check was corrected with the repository formatter before the successful full run.
+
+## CC-039 — ribbon layer selector (2026-10-25)
+
+Problem: Home / Layers offered actions but no inline layer selector. Add a bounded,
+scrollable selector with current-layer/selected-object semantics, a blank mixed-layer
+value, original layer-state icons and color swatches. Choosing a name with no selection
+runs layer.current; choosing it with a selection runs properties.set with those handles,
+leaving CLAYER unchanged. Layer-state buttons use layer.set. Preserve the four existing
+actions in two compact rows within the existing panel width so later panels remain reachable.
+No workspace schema or drawing-format change. Disable object reassignment when the selection
+contains a locked-layer object; state controls can still unlock it first.
+
+Files: ribbon.rs, ribbon/layer.rs, tests/ribbon.rs, tests/ribbon_layers.rs,
+reference translation/catalog scan, AGENTS.md and inventory/parity/contribution records.
+
+Reference evidence: Computer Use in AutoCAD 2027 on a new disposable Drawing1 with two
+synthetic LINEs on CC_A and CC_B. The dropdown listed layers with bulb/freeze/lock and color;
+choosing CC_A without selection made it current. Selecting the CC_B line displayed CC_B;
+choosing 0 edited that line, and clearing selection restored CC_A. Selecting both lines
+showed a blank mixed value. Undo reported CHPROP for the layer reassignment (after the
+separate Select All undo group). No drawing was saved or exported, and the private reference
+drawing was not edited. Some inactive canvas frames did not repaint until selection;
+these checks establish control semantics, not rendering/plot fidelity.
+
+Dependencies and reversal: requires the existing ribbon foundation (CC-013–019) and
+reuses existing layer.current/layer.set/properties.set engine behavior. First-Escape
+protection during LINE relies on CC-038. Its tests also cover detached panels from CC-025.
+Reverting CC-039 as a unit removes only this ribbon selector, compact Layers tool arrangement
+and its tests/translations/docs; the earlier Layers palette, Properties editor,
+engine commands, status controls and Layout tab continue unchanged. No later feature
+currently depends on this module. Future consumers must declare that dependency here.
+Historical multi-ID reversal limits are documented above. Color/linetype/style ribbon
+selectors remain separate follow-ups, so they are not coupled to this commit.
+
+Focused validation: all 51 ribbon/layer/native tests passed; the Windows desktop build passed.
+Computer Use confirmed current-layer selection, selected-object layer display and assignment,
+blank mixed state, unchanged CLAYER, and a working selector in the native detached Layers
+window. Control inspection verified object layer 0/current CC_A and Undo back to CC_B.
+Returned the panel to the ribbon; saved only the synthetic CADCraft fixture outside the repo
+and returned to the clean Bracket sample. The previous build exited before launch.
+The mixed locked/unlocked selection policy is conservative (assignment disabled until unlocked);
+that exact AutoCAD variant and the color-swatch editing gesture remain unverified/follow-up.
+Full gate results follow below.
+
+Final source validation: all six cargo xtask ci gates passed (fmt, Clippy with warnings
+denied, tests, assets, layering and wasm). There were 2,327 tests passed, zero failed and
+zero ignored. This includes the selector right-click / Float Panel regression added after
+on-screen testing found the missing context-menu forwarding. Layer-list allocation/sorting
+now occurs only while its popup is open. The initial test/lint compilation issues were
+corrected before this complete final run. Wasm retains the existing three canvas rebuild
+dead-code warnings. A reverse-apply dry run of the staged patch passed without modifying
+files; baseline fc0c091 remains the prior published version. Reversal still requires the
+dependency review described above and recording the inverse operation.
+The final desktop build also passed. After confirming all prior test processes had
+exited, reopened that executable and used Computer Use to right-click Ribbon Layer,
+choose Float Panel, inspect its native Layers window and click Return to Ribbon.
+The selector and four actions returned to Home; inspection showed zero detached panels
+and a clean Bracket sample. This final binary is left open for review.

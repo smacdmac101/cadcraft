@@ -444,13 +444,16 @@ fn panel_geometry_stays_in_one_row_with_every_home_panel_reachable() {
         "Ribbon / Draw: Line",
         "Ribbon / Modify: Move",
         "Ribbon / Annotation: Single Line Text",
-        "Ribbon / Layers: Layers",
         "Ribbon / Block: Create Block",
         "Ribbon / Properties: Properties Inspector",
         "Ribbon / Utilities: Measure Distance",
         "Ribbon / Clipboard: Copy",
     ];
     let first = h.get_by_role_and_label(Role::Button, labels[0]).rect();
+    let layer = h.get_by_label("Ribbon Layer").rect();
+    assert!((layer.top() - first.top()).abs() < 1.0, "layer selector stepped out of the panel row");
+    let layer_action = h.get_by_label("Ribbon / Layers: Layers").rect();
+    assert!(layer_action.top() > layer.bottom() && layer_action.bottom() < 150.0);
     for label in labels {
         let rect = h.get_by_role_and_label(Role::Button, label).rect();
         assert!((rect.top() - first.top()).abs() < 1.0, "{label} stepped out of the panel row: {rect:?}");
