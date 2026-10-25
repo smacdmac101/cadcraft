@@ -1,6 +1,6 @@
 # UI parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-25 · **Change:** minor (selection-aware ribbon layers and reversal records) · **Target:** Autodesk AutoCAD 2027 for Mac (26.0), with the focused Windows pass below
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-25 · **Change:** minor (selection-aware ribbon layer and color controls) · **Target:** Autodesk AutoCAD 2027 for Mac (26.0), with the focused Windows pass below
 
 How CADCraft's interaction compares with AutoCAD's: point entry, object snaps, tracking, dynamic
 input, grips, selection, the command line, chrome and navigation. A drafter's speed in AutoCAD
@@ -13,7 +13,7 @@ Extension, Parallel and Apparent Intersection snaps (#379); dynamic input is a r
 tooltip; FROM, M2P, TK and point filters don't exist; hot-grip options are advertised but
 ignored. Ribbon, palette and status shortcut menus now exist (CC-015–CC-038); broader drafting-context behavior still needs review. Remaining: **≈ 110–170 Opus 5.5 hours**.
 
-The focused [AutoCAD 2027 Windows GUI inventory](autocad-2027-gui-inventory.md) records 31 surfaces, evidence levels and follow-ups. CC-036–CC-038 add paper-space Layout tools, per-item status customization and menu Escape protection. CC-039 adds a current/selected/mixed-layer ribbon selector with layer-state controls and independent reversal tracking; the broader percentage below is not reassessed by these passes.
+The focused [AutoCAD 2027 Windows GUI inventory](autocad-2027-gui-inventory.md) records 31 surfaces, evidence levels and follow-ups. CC-036–CC-038 add paper-space Layout tools, per-item status customization and menu Escape protection. CC-039 adds a current/selected/mixed-layer ribbon selector with layer-state controls and independent reversal tracking; CC-040 adds current/selected/mixed color semantics, inherited swatches and indexed/RGB entry; the broader percentage below is not reassessed by these passes.
 
 ## How this was measured
 
@@ -287,3 +287,4 @@ the public [docking reference](https://help.autodesk.com/view/ACD/2027/ENU/?caas
 | 2026-10-10 | major | First UI-parity audit: point entry, snaps, tracking, dynamic input, grips, selection, command line, chrome, navigation, keys |
 | 2026-10-24 | minor | Single-reference attribute values in Properties; double-click and selected ATTEDIT/EATTEDIT open an undoable value editor with Apply/Cancel. Reference observed in AutoCAD 2027 on Windows; formatting tabs remain a gap. |
 | 2026-10-24 | minor | Toolbar context menu and Panels menu expose checked tool-group visibility, Show All Tool Groups, side-panel visibility and interface bars. Tool-group choices persist in UI settings. |
+| 2026-10-25 | minor | CC-040: selection-aware ribbon color selector, inherited swatches, exact current RGB, bounded floating popup and locked-selection protection. Full Select Color dialog remains a gap. |

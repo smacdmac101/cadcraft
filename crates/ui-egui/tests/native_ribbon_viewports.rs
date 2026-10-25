@@ -135,6 +135,38 @@ fn elements(app: &mut CadApp, ctx: &Context, label: &str) -> Value {
 }
 
 #[test]
+fn native_properties_panel_color_popup_remains_inside_small_viewport_and_routes_edits() {
+    let (ctx, host) = host();
+    let mut app = CadApp::new(Session::default(), Services::default());
+    app.run("new", json!({})).unwrap();
+    app.run("ribbon", json!({})).unwrap();
+    app.run("ui.ribbon.float", json!({"tab":"home","panel":"properties"})).unwrap();
+    for _ in 0..5 {
+        frame(&ctx, &host, &mut app);
+    }
+    for label in ["Ribbon Color", "Ribbon Color / Red"] {
+        let element = elements(&mut app, &ctx, label);
+        assert_ne!(element["viewport"], format!("{:016x}", ViewportId::ROOT.0.value()));
+        let r = element["rect"].as_array().unwrap();
+        let x = r[0].as_f64().unwrap() as f32;
+        let y = r[1].as_f64().unwrap() as f32;
+        assert!(x >= 0.0 && y >= 0.0 && x + r[2].as_f64().unwrap() as f32 <= 204.0 && y + r[3].as_f64().unwrap() as f32 <= 154.0, "{label}: {r:?}");
+        let pos = egui::pos2(x + 5.0, y + 5.0);
+        for pressed in [true, false] {
+            host.borrow_mut().events = vec![
+                Event::PointerMoved(pos),
+                Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE },
+            ];
+            frame(&ctx, &host, &mut app);
+        }
+        for _ in 0..4 {
+            frame(&ctx, &host, &mut app);
+        }
+    }
+    assert_eq!(app.session.doc().unwrap().header.i64("CECOLOR", 256), 1);
+}
+
+#[test]
 fn native_callback_uses_desktop_position_routes_tool_input_and_closes_only_the_panel() {
     let (ctx, host) = host();
     host.borrow_mut().position_delay = 12;

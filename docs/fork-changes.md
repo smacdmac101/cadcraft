@@ -390,3 +390,58 @@ exited, reopened that executable and used Computer Use to right-click Ribbon Lay
 choose Float Panel, inspect its native Layers window and click Return to Ribbon.
 The selector and four actions returned to Home; inspection showed zero detached panels
 and a clean Bracket sample. This final binary is left open for review.
+## CC-040 — selection-aware ribbon color control (2026-10-25)
+
+Home / Properties gains an inline color selector and swatch. With no selection it
+sets the color for new objects through color; with a selection it runs properties.set
+for those handles, leaving the current color unchanged. Mixed logical values show a
+blank field. ByLayer remains one logical value across different layer colors; its
+swatch resolves against the first selected object's layer, as observed in AutoCAD.
+Exact current RGB values are read from CECOLOR_RGB rather than their nearest index.
+The three existing Properties actions remain below the selector in the same panel width.
+
+The popup offers inherited and standard indexed colors with original swatches and a
+validated index/RGB/hex input. Its bounded scroll area keeps these choices reachable
+in the small detached native panel. Locked-layer selections cannot be recolored here.
+Right-clicking the selector preserves the panel Float/Return and visibility menu.
+No drawing format, workspace schema or engine command behavior changes.
+
+Reference: Computer Use in AutoCAD 2027, disposable Drawing1 with two synthetic LINEs.
+Setting Blue without selection changed the current color. Selecting two ByLayer lines
+on red/green layers still displayed ByLayer with the first layer's red swatch. Selecting
+Green changed both objects. Clearing selection restored Blue. Changing just one line to
+Red and selecting both showed a blank color field. Undo reported CHPROP after undoing
+the separate selection group. More Colors opened Select Color with Index Color, True
+Color and Color Books tabs; True Color exposed RGB entry. Canceled without applying.
+The private reference drawing was not edited. No reference screenshot or asset is committed.
+
+Dependencies/reversal: depends on the ribbon/display foundation CC-013–024. Popup-first
+Escape protection relies on CC-038; detached/native verification uses CC-025/028. Reuses
+existing color/properties.set commands and original layer swatch painter. No dependency
+on the CC-039 layer-selector module: the two selectors share panel placement only.
+Revert this commit as a unit to remove the new color UI, its compact Properties arrangement,
+tests, translations and records; Layers, the earlier Properties palette and engine color
+commands continue unchanged. Check later entries for consumers before reverting.
+
+Remaining visual/function differences: compact index/RGB text entry replaces the full
+Select Color dialog; HSL editing, color-book libraries and the expanded visual color grid
+remain follow-ups. This does not claim full Properties/ribbon parity.
+Validation results are recorded below after the final run.
+
+Focused validation: 53 ribbon/color/native tests passed and the Windows desktop build
+passed. Computer Use verified current Blue, selected ByLayer then Green, blank mixed
+Green/Blue state and selector right-click / Float Panel. In the native Properties window,
+scrolled to the compact custom editor, entered #0c2238 and clicked Apply Color. Control
+inspection confirmed both selected lines were exactly 12,34,56 and the current color
+remained Blue. Undo restored the separate Green/Blue object colors. The old CC-039 build
+was verified clean and exited before the CC-040 executable was opened.
+The native Return to Ribbon button restored the selector and all three actions; inspection
+reported zero detached panels. Saved only the synthetic two-line drawing outside the repo
+and switched back to the clean Bracket sample. A reverse-apply check of the staged feature
+patch passed without changing files; its final documented reversal scope is unchanged.
+Final validation: all six cargo xtask ci gates passed (fmt, Clippy with warnings denied,
+tests, assets, layering and wasm): 2,333 tests passed, zero failures and zero ignored.
+Wasm retains the same three pre-existing canvas rebuild dead-code warnings. The final
+Windows executable passed on-screen current/selected/mixed/native custom-color checks.
+A fresh disposable AutoCAD Drawing2 repeated current Blue / selected ByLayer / selected
+Green / cleared-selection Blue with a synthetic line; the original drawing stayed untouched.

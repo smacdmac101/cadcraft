@@ -8,6 +8,7 @@ use egui::{Sense, vec2};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
+mod color;
 pub mod context;
 mod floating;
 mod layer;
@@ -566,28 +567,33 @@ fn tool_button(ui: &mut egui::Ui, tool: Tool, large: bool, panel_label: &str, sm
 fn show_panel(app: &mut CadApp, ui: &mut egui::Ui, tab_id: &str, panel: &Panel, titles: bool, clicked: &mut Option<&'static str>) {
     let t = Tokens::get();
     let layer_panel = tab_id == "home" && panel.id == "layers";
+    let color_panel = tab_id == "home" && panel.id == "properties";
+    let inline_panel = layer_panel || color_panel;
     let (rect, _) = ui.allocate_exact_size(vec2(188.0, 112.0), Sense::hover());
     ui.painter().rect_filled(rect, 2.0, t.panel);
     let mut local_context = ui.interact(rect, ui.id().with("panel_context"), Sense::click());
     let tools: Vec<_> = tools(panel).into_iter().filter(|(_, command, _)| !app.ui.hidden_tools.iter().any(|hidden| hidden == command)).collect();
-    if layer_panel {
+    if inline_panel {
         let bounds = egui::Rect::from_min_size(rect.min + vec2(4.0, 4.0), vec2(rect.width() - 8.0, 24.0));
-        if let Some(response) =
-            ui.scope_builder(egui::UiBuilder::new().id_salt("layer_selector").max_rect(bounds), |ui| layer::show(app, ui, bounds.width())).inner
+        if let Some(response) = ui
+            .scope_builder(egui::UiBuilder::new().id_salt(if layer_panel { "layer_selector" } else { "color_selector" }).max_rect(bounds), |ui| {
+                if layer_panel { layer::show(app, ui, bounds.width()) } else { color::show(app, ui, bounds.width()) }
+            })
+            .inner
         {
             local_context |= response;
         }
     }
     for (index, tool) in tools.iter().take(4).enumerate() {
-        let large = index == 0 && !layer_panel;
-        let offset = if layer_panel {
+        let large = index == 0 && !inline_panel;
+        let offset = if inline_panel {
             vec2(4.0 + (index % 2) as f32 * 92.0, 32.0 + (index / 2) as f32 * 26.0)
         } else if large {
             vec2(4.0, 4.0)
         } else {
             vec2(80.0, 4.0 + (index - 1) as f32 * 26.0)
         };
-        let small_width = if layer_panel { 84.0 } else { 98.0 };
+        let small_width = if inline_panel { 84.0 } else { 98.0 };
         let bounds = egui::Rect::from_min_size(rect.min + offset, if large { vec2(68.0, 74.0) } else { vec2(small_width, 22.0) });
         let response = ui
             .scope_builder(egui::UiBuilder::new().id_salt(("tool", tool.1)).max_rect(bounds).layout(egui::Layout::top_down(egui::Align::Min)), |ui| {
