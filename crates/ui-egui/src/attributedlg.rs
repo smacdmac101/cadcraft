@@ -3,7 +3,15 @@ use cadcraft_doc::{EntityKind, Handle};
 use serde_json::json;
 
 use crate::CadApp;
+mod properties;
 mod text_options;
+
+#[derive(Clone, Copy, PartialEq)]
+enum Tab {
+    Attribute,
+    TextOptions,
+    Properties,
+}
 
 #[derive(Clone)]
 struct State {
@@ -13,7 +21,8 @@ struct State {
     values: Vec<(String, String, String, bool)>,
     initial_values: Vec<String>,
     formats: Vec<text_options::Format>,
-    text_options: bool,
+    properties: Vec<properties::Properties>,
+    tab: Tab,
     selected_attribute: usize,
     error: Option<String>,
 }
@@ -54,17 +63,28 @@ pub(crate) fn show(app: &mut CadApp, ctx: &egui::Context) {
     let mut state = ctx.data(|d| d.get_temp::<State>(id)).filter(|s| s.drawing == drawing && s.handle == handle).unwrap_or_else(|| State {
         drawing,
         handle,
+        properties: attributes.iter().map(|a| properties::Properties::new(app.session.doc().ok(), &name, a)).collect(),
         name: app.session.doc().ok().and_then(|d| cadcraft_doc::dynblock::custom_properties(d, handle)).map_or(name, |(name, _)| name),
         values: attributes.iter().map(|a| (a.tag.clone(), a.prompt.clone(), a.text.value.clone(), a.constant)).collect(),
         initial_values: attributes.iter().map(|a| a.text.value.clone()).collect(),
         formats: attributes.iter().map(text_options::Format::new).collect(),
-        text_options: false,
+        tab: Tab::Attribute,
         selected_attribute: 0,
         error: None,
     });
     let locked = app.session.doc().ok().is_some_and(|d| d.entity(handle).and_then(|e| d.layer(&e.common.layer)).is_some_and(|l| l.locked));
     let mut styles: Vec<_> = app.session.doc().map(|d| d.text_styles.iter().map(|s| s.name.clone()).collect()).unwrap_or_default();
     styles.sort_by_cached_key(|name| name.to_lowercase());
+    let mut layers: Vec<_> = app.session.doc().map(|d| d.layers.iter().map(|l| l.name.clone()).collect()).unwrap_or_default();
+    layers.sort_by_cached_key(|name| name.to_lowercase());
+    let mut linetypes: Vec<_> = app
+        .session
+        .doc()
+        .map(|d| {
+            d.linetypes.iter().filter(|l| !["bylayer", "byblock"].contains(&l.name.to_ascii_lowercase().as_str())).map(|l| l.name.clone()).collect()
+        })
+        .unwrap_or_default();
+    linetypes.sort_by_cached_key(|name| name.to_lowercase());
     let mut open = true;
     let mut apply = false;
     let mut close = false;
@@ -77,12 +97,13 @@ pub(crate) fn show(app: &mut CadApp, ctx: &egui::Context) {
         egui::Window::new("Edit Attributes").id(editor_id).order(egui::Order::Foreground).open(&mut open).default_width(520.0).show(ctx, |ui| {
             ui.label(format!("Block: {}", state.name));
             ui.horizontal(|ui| {
-                ui.selectable_value(&mut state.text_options, false, "Attribute");
-                ui.selectable_value(&mut state.text_options, true, "Text Options");
+                ui.selectable_value(&mut state.tab, Tab::Attribute, "Attribute");
+                ui.selectable_value(&mut state.tab, Tab::TextOptions, "Text Options");
+                ui.selectable_value(&mut state.tab, Tab::Properties, "Properties");
             });
             ui.separator();
             ui.add_enabled_ui(!locked, |ui| {
-                if state.text_options {
+                if state.tab != Tab::Attribute {
                     let shown = state.formats.get(state.selected_attribute).map_or("", |f| f.tag.as_str());
                     egui::ComboBox::from_id_salt("attribute_text_target").selected_text(shown).show_ui(ui, |ui| {
                         for (index, format) in state.formats.iter().enumerate() {
@@ -90,8 +111,12 @@ pub(crate) fn show(app: &mut CadApp, ctx: &egui::Context) {
                         }
                     });
                     ui.add_space(8.0);
-                    if let Some(format) = state.formats.get_mut(state.selected_attribute) {
-                        format.show(ui, &styles);
+                    if state.tab == Tab::TextOptions {
+                        if let Some(format) = state.formats.get_mut(state.selected_attribute) {
+                            format.show(ui, &styles);
+                        }
+                    } else if let Some(properties) = state.properties.get_mut(state.selected_attribute) {
+                        properties.show(ui, &layers, &linetypes);
                     }
                 } else {
                     egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
@@ -145,10 +170,18 @@ pub(crate) fn show(app: &mut CadApp, ctx: &egui::Context) {
         state.error = match formats {
             Err(error) => Some(error),
             Ok(formats) => {
-                if values.is_empty() && formats.is_empty() {
+                let properties: serde_json::Map<_, _> = state
+                    .properties
+                    .iter()
+                    .filter_map(|property| {
+                        let fields = property.pending();
+                        (!fields.is_empty()).then(|| (property.tag.clone(), json!(fields)))
+                    })
+                    .collect();
+                if values.is_empty() && formats.is_empty() && properties.is_empty() {
                     None
                 } else {
-                    app.run("attedit", json!({"handle": handle.hex(), "values": values, "formats":formats})).err()
+                    app.run("attedit", json!({"handle": handle.hex(), "values": values, "formats":formats, "properties":properties})).err()
                 }
             }
         };
@@ -158,6 +191,9 @@ pub(crate) fn show(app: &mut CadApp, ctx: &egui::Context) {
             state.initial_values = state.values.iter().map(|(_, _, value, _)| value.clone()).collect();
             for format in &mut state.formats {
                 format.applied();
+            }
+            for property in &mut state.properties {
+                property.applied();
             }
         }
     }

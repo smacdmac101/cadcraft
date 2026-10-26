@@ -1,7 +1,7 @@
 # AutoCAD 2027 Windows GUI inventory and CADCraft work list
 
 Updated 2026-10-25. CADCraft baseline: `27403b3`; this inventory accompanies
-CC-035–CC-047. Reference: the installed AutoCAD 2027 Windows application, inspected
+CC-035–CC-048. Reference: the installed AutoCAD 2027 Windows application, inspected
 through Computer Use. This is a first-level GUI inventory and prioritized work list,
 not an exhaustive test of every nested dialog or command, and not a parity percentage.
 
@@ -37,7 +37,7 @@ no drawing was saved. CADCraft checks use the disposable Bracket sample.
 | GI-20 | Workspace switching | Workspace entry visible in status customization (Live); preset menu not opened | Workspace button routes to `ui.noop` (Source) | P1: replace misleading placeholder with real saved workspace selection or disable it explicitly |
 | GI-21 | Ribbon/palette placement | Whole-ribbon and individual floating/anchoring behavior checked in prior pass | Native ribbon windows, anchors/auto-hide and edge snapping (Prior, CC-025–034) | P2: continuous drag transfer, precise cancellation/locks, browser/native-platform checks |
 | GI-22 | Side palettes | Properties/Tool Palettes/Blocks launchers observed on View (Live); palette bodies not refreshed this pass | Layers/Properties visible, shared docking/auto-hide; floating side palettes stay in app (Live/Source) | P1/P2: native side-palette windows and consistent width/focus/return behavior |
-| GI-23 | Block attributes | Enhanced Attribute Editor tabs/text options and Apply/Cancel checked on a synthetic block (Live) | CC-045 adds per-reference style, justification, height, width factor, rotation/oblique and value editing with atomic validation/Undo | CC-046 fixes small value-edit export baselines; CC-047 isolates editor input from the drawing; P1: live preview, per-attribute effects, annotation/multiline options and Properties tab; synthetic round trips required |
+| GI-23 | Block attributes | Enhanced Attribute Editor tabs/text options and Apply/Cancel checked on a synthetic block (Live) | CC-045 adds per-reference text options; CC-048 adds per-attribute layer, color, linetype and lineweight with atomic validation/Undo. Direct DWG and DXF-reopened DWG settings read back in AutoCAD 2027 (Live) | CC-046 fixes small value-edit export baselines; CC-047 isolates root-window editor input; P1: detached native ribbon tools still accept input during the editor, live preview, per-attribute effects and annotation/multiline text options |
 | GI-24 | Layers | Home layer combo and layer actions visible; current/selected/mixed-layer behavior and CHPROP Undo checked on two synthetic lines (Live) | CC-039 adds inline Home selector, layer-state actions and selection-aware edits in docked/detached panels | CC-039 verification in fork ledger; CC-040/041 cover color/linetype semantics; style selectors and full picker/manager remain P1 |
 | GI-25 | Command line | Floating entry, close/customize/history/recent controls (Live) | Entry/history/recent/line-count controls exist (Source) | P2: compare completion settings, transparency, docking and focus while commands run |
 | GI-26 | Drafting aids | Ortho/polar/isometric/tracking/osnap/dynamic input entries in status menu (Live) | Existing transparent toggle commands (Source/tests) | CC-037 visibility must not change enabled state or cancel/pick points in LINE |

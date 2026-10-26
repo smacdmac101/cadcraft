@@ -902,3 +902,75 @@ all test documents were clean. The same title-bar drag gesture did not move eith
 the prior CC-046 build or this build, so native dragging is unverified rather than
 claimed fixed or proved regressed. No private drawing, Autodesk output or asset
 is committed. Inverse-patch verification is recorded with the implementing commit.
+
+## CC-048 — per-reference attribute Properties tab
+
+Reference: AutoCAD 2027 Enhanced Attribute Editor Properties was checked on a
+separate CADCraft-generated Equipment DWG with an AttributeTest cyan layer and
+loaded original-library linetypes. DEVICE_TYPE Layer AttributeTest previewed only
+the title cyan; selecting DASHED and Apply retained those settings. Switching to
+DEVICE_ID showed Layer 0, Linetype/Color/Lineweight ByLayer. Cancel kept the applied
+result; one Undo restored the title white. Earlier checks covered Red and 0.35 mm
+on one attribute. No AutoCAD-produced drawing or screenshot is committed.
+
+Change: a Properties tab exposes loaded layers/linetypes, named/indexed/RGB color
+entry with basic color choices, and standard metric lineweights plus ByLayer and
+ByBlock. Initial values read each attribute's overrides over its matched definition;
+Layer 0 remains 0. Only explicitly edited fields become ATTEDIT properties, preserving
+inherited defaults, unrelated fields and external changes on no-op Apply. Apply,
+OK and Cancel retain their existing draft semantics; all edited tabs use one command.
+
+ATTEDIT accepts optional per-tag properties (layer/color/linetype/lineweight). All
+property and text-format edits validate before any value mutation. Names canonicalize
+to loaded tables; unknown/ambiguous/duplicate tags and unknown fields are rejected.
+Color/tag/name inputs are bounded; invalid/nonfinite/nonstandard lineweights are
+rejected instead of clamped. Constants and locked/out-of-working-set references
+are protected. Existing overrides, placement and multiline text remain intact.
+Programmatic Default lineweight is supported for existing legacy data, but was
+not observed as a new AutoCAD editor choice and is not offered in the dropdown.
+
+Files: engine/src/cmd/blocks.rs, blocks/attedit.rs, new attedit_properties.rs;
+engine/tests/attribute_properties.rs; ui-egui/src/attributedlg.rs, new
+attributedlg/properties.rs and attributedlg/tests.rs; this ledger and parity records.
+
+Dependencies/reversal: the combined editor uses CC-005, CC-045's Text Options and
+CC-047's input shield. Core property validation uses the upstream AttribProps model;
+it does not require CC-046's baseline fix. Revert this complete arc to remove the
+Properties tab and ATTEDIT properties parameters while retaining value/Text Options
+editing and the input shield. Out-of-order removal of CC-045/047 needs context
+resolution preserving this tab and its tests, or reverse CC-048 first. No file-format
+migration: saved overrides remain readable by the existing model after code reversal.
+A reversal does not undo edits already saved. Full Select Color dialog, live preview,
+plot-style editing and text-effect/annotation controls remain separate gaps.
+
+Focused validation passed 1,096 tests, none failed or ignored: six engine checks cover atomic combined edits, both saved formats, multiline contents, invalid inputs, constants/locks/ambiguous tags and standard lineweights/colors; four UI checks cover choices with real dropdown scrolling, Cancel, errors, inherited defaults and stale-draft protection. A final bound on unknown-field error text and a long-key case were added before the Windows/full-CI pass; those passes must validate the final source before publication.
+
+Windows verification on the CADCraft-generated reference DWG: the Properties tab
+selected AttributeTest, DASHED and 0.35 mm for DEVICE_TYPE, then Apply. The title
+became cyan while DEVICE_ID remained unchanged; switching the target to DEVICE_ID
+showed Layer 0 and ByLayer for its remaining properties. Cancel retained the applied
+edit. Native Ctrl+Z removed all three overrides together and restored the white title;
+Ctrl+Y restored the cyan title and all three overrides. Separate saved DXF and DWG
+files reopened with the same title settings and untouched ID. The saved files and
+readback log stay outside Git.
+
+AutoCAD 2027 readback verified both a direct DWG save and a DWG saved after reopening
+the DXF: both attributes open in Enhanced Attribute Editor. DEVICE_TYPE reads
+AttributeTest, DASHED, Color ByLayer (cyan swatch) and 0.35 mm; DEVICE_ID reads
+Layer 0 and ByLayer for the other three fields. Both values remain intact. Initial
+unsuccessful text picks and a message after cancelling selection did not establish
+lost attributes: picking the unchanged ID's P stroke and allowing the editor to
+finish opening succeeded on both files. No AutoCAD file was saved.
+
+Windows color verification: invalid color text leaves the editor open with an error
+and the model unchanged. Choosing Red then Apply clears the error, stores ACI 1
+only on DEVICE_TYPE and leaves its other overrides and DEVICE_ID unchanged. Cancel
+retains the applied edit. Combined invalid value/format/property atomicity is
+covered by the UI and engine tests. One Undo restores the cyan ByLayer title while
+retaining the earlier layer/linetype/lineweight edits. All six CI gates passed:
+2,379 tests passed, none failed or ignored; fmt, clippy, assets, layers and wasm
+passed. The final-source Windows executable rebuilt successfully; reopening the
+saved DWG, opening Properties and Cancel were rechecked in that executable.
+Detached native ribbon mouse input during this editor remains a
+confirmed separate gap: clicking Line starts a background command while the editor
+stays open. CC-047 protects the root window; it does not cover that native child.

@@ -1,6 +1,6 @@
 # UI parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-25 · **Change:** minor (selection-aware ribbon styles, attribute Text Options, value-edit export alignment and editor input isolation) · **Target:** Autodesk AutoCAD 2027 for Mac (26.0), with the focused Windows pass below
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-25 · **Change:** minor (selection-aware ribbon styles, attribute Text Options/Properties, value-edit export alignment and editor input isolation) · **Target:** Autodesk AutoCAD 2027 for Mac (26.0), with the focused Windows pass below
 
 How CADCraft's interaction compares with AutoCAD's: point entry, object snaps, tracking, dynamic
 input, grips, selection, the command line, chrome and navigation. A drafter's speed in AutoCAD
@@ -164,7 +164,7 @@ down-arrow options menu (DYNPROMPT), and DYNDIM.
 | Palette docking and auto-hide | title-bar menu, docking, anchoring and hover expansion | Every side-panel title menu has Dock Left/Right, Float and Auto-hide. Floating palettes also have explicit dock header buttons. Auto-hide retains edge tabs when docked or title bars when floating; hover opens an overlay, leaving closes it, and Keep Open pins the palette. Tool Sets alone has Move to Ribbon in its right-click menu. Width, placement and auto-hide choices are saved. Floating palettes stay inside the CADCraft window; native palette windows and docking locks remain open work. |
 | Tool Sets palette (Drafting, Modeling, … with flyouts) | yes | yes for 2D groups |
 | Properties Inspector, Quick Properties | yes | yes (every control acts or is visibly unavailable, #182); a single block reference exposes editable attribute values and read-only Position X/Y/Z; coordinate editing is still missing |
-| Block attribute editor | values, text options, attribute properties | Double-click an attributed block, or ATTEDIT/EATTEDIT with one selected, opens Attribute and Text Options tabs with Apply, OK and Cancel (CC-045). CC-047 shields the drawing from outside clicks and drawing shortcuts while the editor is open. Single-line per-reference style, justification, height, width factor, rotation and oblique are editable; constants/locked references are read-only. Live preview, per-attribute effects/annotation/multiline controls and Properties tab remain missing; without a selected block the command uses prompts. |
+| Block attribute editor | values, text options, attribute properties | Double-click an attributed block, or ATTEDIT/EATTEDIT with one selected, opens Attribute, Text Options and Properties tabs with Apply, OK and Cancel (CC-045/048). CC-047 shields the drawing from outside clicks and drawing shortcuts while the editor is open. Single-line per-reference style, justification, height, width factor, rotation and oblique are editable; constants/locked references are read-only. CC-048 adds per-attribute loaded layer/linetype, named/indexed/RGB color and standard lineweight overrides with atomic validation and Undo. Live preview, full color picker, plot-style editing and per-attribute effects/annotation/multiline text controls remain missing; without a selected block the command uses prompts. |
 | Layer Properties Manager (filters, states, VP overrides) | yes | yes |
 | Blocks palette, Content | yes | Blocks window (click to insert, #28) |
 | Status bar toggles | ~25 | most toggles; Annotation Visibility and Workspace do nothing |
@@ -196,7 +196,7 @@ Next comparisons, in order:
    File-format support does not establish an equivalent interactive editor.
 3. Multiple selected block references: common attribute values, mixed-value feedback and one-step
    Undo. The current Properties implementation deliberately handles one reference.
-4. Per-attribute layer, colour and line properties, separate from the enclosing block's properties.
+4. CC-048 adds per-attribute layer, colour, linetype and lineweight overrides, separate from the enclosing block. Direct DWG and DXF-reopened DWG settings were read back in AutoCAD 2027. Live preview, a full color picker and plot-style support remain open. Detached native ribbon tools can still start a command during the attribute editor; root-window input is shielded by CC-047.
 
 Public behavior reference: [AutoCAD 2027 Enhanced Attribute Editor](https://help.autodesk.com/cloudhelp/2027/ENU/AutoCAD-Core/files/GUID-414DC467-291B-4A52-A70D-1165CDEA8B39.htm).
 No Autodesk assets or private drawing fixtures are included in the repository.
@@ -295,3 +295,4 @@ the public [docking reference](https://help.autodesk.com/view/ACD/2027/ENU/?caas
 | 2026-10-25 | minor | CC-045: attribute Text Options for style/justification/height/width/rotation/oblique, atomic per-reference ATTEDIT formats, Apply/Cancel/Undo and locked-target protection; live preview, text effects, multiline options and Properties tab remain open. |
 | 2026-10-25 | minor | CC-046: refresh ordinary justified attribute export baselines after real value edits through all ATTEDIT/-ATTEDIT routes; preserve no-op font offsets and Left/Aligned/Fit placement points. |
 | 2026-10-25 | minor | CC-047: modal attribute-editor input shield, drawing shortcut/typing guards and modal Tab focus navigation; full-window regressions distinguish outside-click selection from already-working Cancel. |
+| 2026-10-26 | minor | CC-048: attribute Properties tab, atomic per-tag ATTEDIT property overrides, inheritance/no-op preservation, loaded table choices and bounded color/lineweight validation; AutoCAD DWG property readback verified; full color picker/live preview/plot styles remain open. |

@@ -3,7 +3,7 @@ use crate::Services;
 use cadcraft_engine::Session;
 use egui::{Event, Key, Modifiers, vec2};
 use egui_kittest::Harness;
-use egui_kittest::kittest::Queryable;
+use egui_kittest::kittest::{NodeT, Queryable};
 
 fn app() -> CadApp {
     let mut app = CadApp::new(Session::default(), Services::default());
@@ -271,4 +271,126 @@ fn invalid_text_options_leave_the_editor_open_without_applying_values() {
     assert_eq!(text(h.state()).height, 5.0);
     assert_eq!(value(h.state()), "Must not change");
     assert!(h.state().ui.dialog.is_none());
+}
+
+fn attribute_props(app: &CadApp) -> cadcraft_doc::AttribProps {
+    let h = app.session.selection()[0];
+    let EntityKind::Insert(i) = &app.session.doc().unwrap().entity(h).unwrap().kind else { panic!("insert") };
+    i.attribs[0].props.clone()
+}
+
+#[test]
+fn attribute_properties_controls_apply_loaded_choices_and_cancel_discards_drafts() {
+    let mut h = harness();
+    h.state_mut().run("layer.new", json!({"name":"AttributeTest","color":"cyan","current":false})).unwrap();
+    h.state_mut().run("linetype", json!({"load":"*"})).unwrap();
+    h.run_steps(3);
+    let original = attribute_props(h.state());
+    h.get_by_label("Properties").click();
+    h.run_steps(3);
+    h.get_by_label("Apply").click();
+    h.run_steps(3);
+    assert_eq!(attribute_props(h.state()), original, "no-op Apply preserves inherited overrides");
+    for (label, choice) in [("Layer", "AttributeTest"), ("Linetype", "DASHED"), ("Lineweight", "0.35 mm")] {
+        h.get_by_label(label).click();
+        h.run_steps(3);
+        h.get_by_label(choice).scroll_to_me();
+        h.run_steps(3);
+        h.get_by_label(choice).click();
+        h.run_steps(3);
+    }
+    edit_field(&mut h, "Color", "Red");
+    h.get_by_label("Apply").click();
+    h.run_steps(3);
+    let edited = attribute_props(h.state());
+    assert_eq!(edited.layer.as_deref(), Some("AttributeTest"));
+    assert_eq!(edited.linetype.as_deref(), Some("DASHED"));
+    assert_eq!(edited.color, Some(cadcraft_doc::color::Color::Index(1)));
+    assert_eq!(edited.lineweight, Some(cadcraft_doc::Lineweight::Mm100(35)));
+    edit_field(&mut h, "Color", "Blue");
+    h.get_by_label("Cancel").click();
+    h.run_steps(3);
+    assert_eq!(attribute_props(h.state()), edited);
+    h.state_mut().run("undo", json!({})).unwrap();
+    let EntityKind::Insert(i) = &h.state().session.doc().unwrap().model.iter().find(|e| matches!(e.kind, EntityKind::Insert(_))).unwrap().kind else {
+        panic!("insert")
+    };
+    assert_eq!(i.attribs[0].props, original);
+}
+
+#[test]
+fn attribute_properties_errors_keep_all_tabs_unapplied_and_editor_open() {
+    let mut h = harness();
+    h.run_steps(3);
+    let original = text(h.state());
+    let original_props = attribute_props(h.state());
+    edit_field(&mut h, "DEVICE_TYPE", "Must not change");
+    h.get_by_label("Text Options").click();
+    h.run_steps(3);
+    edit_field(&mut h, "Height", "9");
+    h.get_by_label("Properties").click();
+    h.run_steps(3);
+    edit_field(&mut h, "Color", "Invalid color");
+    h.get_by_label("OK").click();
+    h.run_steps(3);
+    assert_eq!(text(h.state()), original);
+    assert_eq!(attribute_props(h.state()), original_props);
+    assert_eq!(h.state().ui.dialog.as_deref(), Some("attedit"));
+    assert!(h.query_by_label("invalid parameters for `attedit`: invalid attribute color").is_some());
+    h.get_by_label("Cancel").click();
+    h.run_steps(3);
+    assert_eq!(text(h.state()), original);
+}
+
+#[test]
+fn attribute_properties_noop_apply_does_not_replay_an_applied_draft_over_external_edits() {
+    let mut h = harness();
+    h.run_steps(3);
+    h.get_by_label("Properties").click();
+    h.run_steps(3);
+    edit_field(&mut h, "Color", "Red");
+    h.get_by_label("Apply").click();
+    h.run_steps(3);
+    let handle = h.state().session.selection()[0];
+    h.state_mut().run("attedit", json!({"handle":handle.hex(),"properties":{"DEVICE_TYPE":{"color":"Blue","lineweight":0.5}}})).unwrap();
+    let external = attribute_props(h.state());
+    h.get_by_label("Apply").click();
+    h.run_steps(3);
+    assert_eq!(attribute_props(h.state()), external);
+    edit_field(&mut h, "Color", "Cyan");
+    h.get_by_label("Apply").click();
+    h.run_steps(3);
+    assert_eq!(attribute_props(h.state()).color, Some(cadcraft_doc::color::Color::Index(4)));
+    assert_eq!(attribute_props(h.state()).lineweight, external.lineweight);
+}
+
+#[test]
+fn attribute_properties_show_definition_defaults_without_creating_overrides() {
+    let mut fixture = app();
+    fixture.run("linetype", json!({"load":"*"})).unwrap();
+    let block = std::sync::Arc::make_mut(fixture.session.doc_mut().unwrap().blocks.get_mut("Equipment").unwrap());
+    let definition = block.entities.iter().find(|e| matches!(e.kind, EntityKind::AttDef(_))).unwrap().handle;
+    assert!(block.entities.modify(definition, |definition| {
+        definition.common.color = cadcraft_doc::color::Color::Index(4);
+        definition.common.linetype = "DASHED".into();
+        definition.common.lineweight = cadcraft_doc::Lineweight::Mm100(50);
+    }));
+    let target = fixture.session.selection()[0];
+    fixture
+        .session
+        .doc_mut()
+        .unwrap()
+        .modify_entity(target, |e| {
+            let EntityKind::Insert(i) = &mut e.kind else { panic!("insert") };
+            i.attribs[0].props = cadcraft_doc::AttribProps::default();
+        })
+        .unwrap();
+    let mut h = Harness::builder().with_size(vec2(800.0, 600.0)).build_ui_state(|ui, app| show(app, ui.ctx()), fixture);
+    h.run_steps(3);
+    h.get_by_label("Properties").click();
+    h.run_steps(3);
+    assert_eq!(h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Color").accesskit_node().value().as_deref(), Some("Cyan"));
+    h.get_by_label("Apply").click();
+    h.run_steps(3);
+    assert!(attribute_props(h.state()).is_empty(), "displaying inherited definition defaults must not materialize per-reference overrides");
 }

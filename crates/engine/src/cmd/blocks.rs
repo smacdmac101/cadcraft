@@ -17,6 +17,7 @@ use crate::{Accept, EngineError, Input, Interactive, Prompt, Result, Session, St
 
 mod attedit;
 mod attedit_format;
+mod attedit_properties;
 mod burst;
 mod dyngrip;
 mod extract;
