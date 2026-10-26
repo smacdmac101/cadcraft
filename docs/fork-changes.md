@@ -1076,3 +1076,28 @@ A remaining visual difference was observed: disabling the parent window fades it
 frame/translucency as well as its controls; opaque parent-frame styling is a later
 polish item. Focused attribute-editor suite: 17 passed (three new picker tests).
 Clippy passed after collapsing three conditionals. All six CI gates passed: 2,384 tests passed, none failed or ignored; fmt, clippy, assets, layers and wasm passed.
+
+## CC-051 — opaque disabled attribute-editor parent
+
+Trigger/reference: while CADCraft's Select Color dialog is open, the disabled
+Edit Attributes window fades its frame as well as its controls, allowing unrelated
+ribbon labels to show through. AutoCAD 2027's disabled parent remains opaque.
+Both appearances were inspected through Computer Use with synthetic drawings.
+
+Change: suppress egui's disabled-area opacity only for rendering that parent,
+then restore the exact original global style before rendering the nested picker
+or other controls/viewports. The nested input shield supplies the dimming. Parent
+controls, title-bar interaction and existing modal behavior remain disabled.
+The color draft, Apply/Cancel/Undo, saved colors and ribbon guards are unchanged.
+
+Files: ui-egui/src/attributedlg.rs, attributedlg/tests.rs and this ledger/UI parity/
+GUI inventory. Existing picker interactions now also assert restoration of the
+normal disabled alpha; the RGB reopen case uses a non-default alpha of 0.37.
+No drawing/configuration migration, assets or external dependencies.
+
+Dependencies/reversal: requires CC-050's nested picker. Revert this arc to restore
+the prior parent translucency without removing picker functionality or saved data.
+Later parent-style changes need conflict resolution if this arc is reverted.
+CC-047/049 input guards and CC-048 property commands remain independently useful.
+Windows visual confirmation and the full quality gates passed, as recorded below.
+Windows final-source build passed in 3m02s. The disabled parent stays opaque with both True Color and Index Color tabs; underlying ribbon labels no longer show through. Its close button remains blocked. Cancel Color returns to enabled parent controls, parent Cancel closes the editor, native ribbon appearance resumes, and both test documents remain clean. All six CI gates passed: 2,384 tests passed, none failed or ignored; fmt, clippy, assets, layers and wasm passed.

@@ -396,10 +396,12 @@ fn attribute_properties_show_definition_defaults_without_creating_overrides() {
 }
 
 fn open_color_picker(h: &mut Harness<'static, CadApp>) {
+    let disabled_alpha = h.ctx.global_style().visuals.disabled_alpha;
     h.get_by_label("Select Color…").click();
     h.run_steps(4);
     assert!(h.get_by_label("Apply").accesskit_node().is_disabled());
     assert_eq!(h.state().ui.dialog.as_deref(), Some("attedit"));
+    assert_eq!(h.ctx.global_style().visuals.disabled_alpha, disabled_alpha, "parent appearance must not change other disabled controls");
 }
 
 #[test]
@@ -481,6 +483,7 @@ fn color_picker_cancel_escape_invalid_input_and_parent_cancel_preserve_drawing()
 #[test]
 fn color_picker_rgb_controls_update_draft_and_cancelled_rgb_is_not_reused() {
     let mut h = harness();
+    h.ctx.global_style_mut(|style| style.visuals.disabled_alpha = 0.37);
     h.run_steps(3);
     h.get_by_label("Properties").click();
     h.run_steps(3);

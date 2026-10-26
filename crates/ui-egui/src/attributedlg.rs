@@ -93,6 +93,12 @@ pub(crate) fn show(app: &mut CadApp, ctx: &egui::Context) {
     let mut close = false;
     let picking_color = state.color_picker.is_some();
     let mut select_color = false;
+    // Keep the disabled window frame opaque. The nested modal provides the dimming;
+    // fading the entire parent area lets unrelated ribbon labels show through it.
+    let parent_style = picking_color.then(|| ctx.global_style());
+    if picking_color {
+        ctx.global_style_mut(|style| style.visuals.disabled_alpha = 1.0);
+    }
     // Keep the draggable editor above a modal input shield. Drawing/ribbon clicks must
     // not select objects or feed a running command while its attribute drafts are open.
     egui::Modal::new(egui::Id::new("attribute_editor_modal")).frame(egui::Frame::NONE).show(ctx, |modal_ui| {
@@ -161,6 +167,9 @@ pub(crate) fn show(app: &mut CadApp, ctx: &egui::Context) {
                 });
             });
     });
+    if let Some(style) = parent_style {
+        ctx.set_global_style(style);
+    }
     if select_color
         && !locked
         && let Some(properties) = state.properties.get(state.selected_attribute)
