@@ -706,7 +706,7 @@ pub fn shortcuts(app: &mut CadApp, ctx: &egui::Context) {
         (sc(Modifiers::NONE, Key::F12), "dynmode"),
     ];
     crate::clipboard::mirror(app, ctx);
-    if ctx.egui_wants_keyboard_input() || app.closing.is_some() {
+    if ctx.egui_wants_keyboard_input() || app.closing.is_some() || app.ui.dialog.as_deref() == Some("attedit") {
         return;
     }
     // Cmd/Ctrl+C, X and V arrive as clipboard events, not key presses.

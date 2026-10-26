@@ -1,6 +1,6 @@
 # UI parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-25 · **Change:** minor (selection-aware ribbon styles, attribute Text Options and value-edit export alignment) · **Target:** Autodesk AutoCAD 2027 for Mac (26.0), with the focused Windows pass below
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-25 · **Change:** minor (selection-aware ribbon styles, attribute Text Options, value-edit export alignment and editor input isolation) · **Target:** Autodesk AutoCAD 2027 for Mac (26.0), with the focused Windows pass below
 
 How CADCraft's interaction compares with AutoCAD's: point entry, object snaps, tracking, dynamic
 input, grips, selection, the command line, chrome and navigation. A drafter's speed in AutoCAD
@@ -164,7 +164,7 @@ down-arrow options menu (DYNPROMPT), and DYNDIM.
 | Palette docking and auto-hide | title-bar menu, docking, anchoring and hover expansion | Every side-panel title menu has Dock Left/Right, Float and Auto-hide. Floating palettes also have explicit dock header buttons. Auto-hide retains edge tabs when docked or title bars when floating; hover opens an overlay, leaving closes it, and Keep Open pins the palette. Tool Sets alone has Move to Ribbon in its right-click menu. Width, placement and auto-hide choices are saved. Floating palettes stay inside the CADCraft window; native palette windows and docking locks remain open work. |
 | Tool Sets palette (Drafting, Modeling, … with flyouts) | yes | yes for 2D groups |
 | Properties Inspector, Quick Properties | yes | yes (every control acts or is visibly unavailable, #182); a single block reference exposes editable attribute values and read-only Position X/Y/Z; coordinate editing is still missing |
-| Block attribute editor | values, text options, attribute properties | Double-click an attributed block, or ATTEDIT/EATTEDIT with one selected, opens Attribute and Text Options tabs with Apply, OK and Cancel (CC-045). Single-line per-reference style, justification, height, width factor, rotation and oblique are editable; constants/locked references are read-only. Live preview, per-attribute effects/annotation/multiline controls and Properties tab remain missing; without a selected block the command uses prompts. |
+| Block attribute editor | values, text options, attribute properties | Double-click an attributed block, or ATTEDIT/EATTEDIT with one selected, opens Attribute and Text Options tabs with Apply, OK and Cancel (CC-045). CC-047 shields the drawing from outside clicks and drawing shortcuts while the editor is open. Single-line per-reference style, justification, height, width factor, rotation and oblique are editable; constants/locked references are read-only. Live preview, per-attribute effects/annotation/multiline controls and Properties tab remain missing; without a selected block the command uses prompts. |
 | Layer Properties Manager (filters, states, VP overrides) | yes | yes |
 | Blocks palette, Content | yes | Blocks window (click to insert, #28) |
 | Status bar toggles | ~25 | most toggles; Annotation Visibility and Workspace do nothing |
@@ -294,3 +294,4 @@ the public [docking reference](https://help.autodesk.com/view/ACD/2027/ENU/?caas
 | 2026-10-25 | minor | CC-043: Annotate text-style selector, shared TEXT/MTEXT style assignment and annotative updates; current/selected/mixed state, manager access, native popup and reversal tracking. |
 | 2026-10-25 | minor | CC-045: attribute Text Options for style/justification/height/width/rotation/oblique, atomic per-reference ATTEDIT formats, Apply/Cancel/Undo and locked-target protection; live preview, text effects, multiline options and Properties tab remain open. |
 | 2026-10-25 | minor | CC-046: refresh ordinary justified attribute export baselines after real value edits through all ATTEDIT/-ATTEDIT routes; preserve no-op font offsets and Left/Aligned/Fit placement points. |
+| 2026-10-25 | minor | CC-047: modal attribute-editor input shield, drawing shortcut/typing guards and modal Tab focus navigation; full-window regressions distinguish outside-click selection from already-working Cancel. |

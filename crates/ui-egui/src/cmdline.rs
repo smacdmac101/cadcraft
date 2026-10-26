@@ -54,7 +54,7 @@ pub fn dyn_frame(app: &CadApp) -> Option<crate::dyninput::Frame> {
 /// the command line deaf to typing). While no widget has focus, a pressed Tab becomes a `"\t"`
 /// text event, which keeps its place among the other keystrokes; [`keyboard`] handles it.
 pub fn capture_tab(ctx: &egui::Context, raw: &mut egui::RawInput) {
-    if ctx.egui_wants_keyboard_input() {
+    if ctx.egui_wants_keyboard_input() || ctx.memory(|m| m.top_modal_layer().is_some()) {
         return;
     }
     raw.events.retain_mut(|e| {
@@ -263,7 +263,7 @@ pub fn keyboard(app: &mut CadApp, ctx: &egui::Context) {
     if dismiss_popup_on_escape(ctx) {
         return;
     }
-    if ctx.egui_wants_keyboard_input() {
+    if ctx.egui_wants_keyboard_input() || app.ui.dialog.as_deref() == Some("attedit") {
         return;
     }
     let events = ctx.input(|i| i.events.clone());

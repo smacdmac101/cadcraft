@@ -5,7 +5,7 @@ use egui::{Event, Key, Modifiers, vec2};
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
 
-fn harness() -> Harness<'static, CadApp> {
+fn app() -> CadApp {
     let mut app = CadApp::new(Session::default(), Services::default());
     app.run("attdef", json!({"tag":"DEVICE_TYPE", "default":"POWER ADAPTER", "at":[0,0], "height":1})).unwrap();
     let handles: Vec<_> = app.session.doc().unwrap().model.iter().map(|e| e.handle.hex()).collect();
@@ -14,7 +14,11 @@ fn harness() -> Harness<'static, CadApp> {
     app.run("select", json!({"handles":[inserted["handle"]]})).unwrap();
     app.start("eattedit");
     assert_eq!(app.ui.dialog.as_deref(), Some("attedit"));
-    Harness::builder().with_size(vec2(800.0, 600.0)).build_ui_state(|ui, app| show(app, ui.ctx()), app)
+    app
+}
+
+fn harness() -> Harness<'static, CadApp> {
+    Harness::builder().with_size(vec2(800.0, 600.0)).build_ui_state(|ui, app| show(app, ui.ctx()), app())
 }
 
 fn value(app: &CadApp) -> String {
@@ -71,6 +75,128 @@ fn text(app: &CadApp) -> cadcraft_doc::Text {
         panic!("insert")
     };
     i.attribs[0].text.clone()
+}
+
+fn full_harness() -> Harness<'static, CadApp> {
+    let mut app = app();
+    app.run("ui.toolsets.ribbon", json!({})).unwrap();
+    app.run("view.set", json!({"center":[50,50],"height":100})).unwrap();
+    app.canvas.zoom_pending = false;
+    let mut h = Harness::builder().with_size(vec2(1600.0, 1000.0)).with_step_dt(1.0 / 60.0).build_ui_state(
+        |ui, app: &mut CadApp| {
+            app.logic(ui.ctx());
+            app.ui(ui);
+        },
+        app,
+    );
+    h.run_steps(5);
+    h
+}
+
+fn click_at(h: &mut Harness<'_, CadApp>, pos: egui::Pos2) {
+    h.event(Event::PointerMoved(pos));
+    h.run_steps(2);
+    for pressed in [true, false] {
+        h.event(Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Modifiers::NONE });
+        h.run_steps(1);
+    }
+    h.run_steps(2);
+}
+
+#[test]
+fn attribute_editor_outside_click_keeps_canvas_selection_idle() {
+    let mut h = full_harness();
+    let selection = h.state().session.selection();
+    let original = text(h.state());
+    let outside = h.state().canvas.rect.unwrap().max - vec2(90.0, 180.0);
+    assert!(h.state().session.pending_window.is_none());
+    click_at(&mut h, outside);
+    assert!(h.state().session.pending_window.is_none(), "an outside click must not start a canvas selection under the editor");
+    assert_eq!(h.state().ui.dialog.as_deref(), Some("attedit"));
+    assert_eq!(h.state().session.selection(), selection);
+    assert_eq!(text(h.state()), original);
+    let cancel = h.get_by_label("Cancel").rect().center();
+    click_at(&mut h, cancel);
+    assert!(h.state().ui.dialog.is_none(), "the shield must not cover editor controls after an outside click");
+}
+
+#[test]
+fn attribute_editor_cancel_over_canvas_does_not_start_selection() {
+    let mut h = full_harness();
+    let selection = h.state().session.selection();
+    let original = text(h.state());
+    h.get_by_label("Text Options").click();
+    h.run_steps(5);
+    let cancel = h.get_by_label("Cancel").rect().center();
+    assert!(h.state().canvas.rect.unwrap().contains(cancel), "fixture must put Cancel above the canvas");
+    click_at(&mut h, cancel);
+    assert!(h.state().ui.dialog.is_none());
+    assert!(h.state().session.pending_window.is_none());
+    assert_eq!(h.state().session.selection(), selection);
+    assert_eq!(text(h.state()), original);
+}
+
+#[test]
+fn attribute_editor_blocks_drawing_shortcuts_and_command_text() {
+    let mut h = full_harness();
+    let selection = h.state().session.selection();
+    let original = text(h.state());
+    let grid = h.state().session.settings.gridmode;
+    h.key_press(Key::Delete);
+    h.run_steps(2);
+    assert_eq!(h.state().session.selection(), selection);
+    assert_eq!(text(h.state()), original);
+    h.key_press(Key::F7);
+    h.event(Event::Text("line".into()));
+    h.run_steps(2);
+    assert_eq!(h.state().session.settings.gridmode, grid);
+    assert!(h.state().cmd.buffer.is_empty());
+    assert!(h.state().session.running.is_none());
+    h.get_by_label("Cancel").click();
+    h.run_steps(3);
+    h.event(Event::Text("line".into()));
+    h.run_steps(2);
+    assert_eq!(h.state().cmd.buffer, "line", "command typing resumes after closing the editor");
+}
+
+#[test]
+fn attribute_editor_outside_click_does_not_feed_a_running_line() {
+    let mut h = full_harness();
+    let selection = h.state().session.selection();
+    h.state_mut().session.start("line").unwrap();
+    h.state_mut().session.input(cadcraft_engine::Input::Point(cadcraft_engine::geom::Vec2::new(25.0, 25.0))).unwrap();
+    h.state_mut().session.set_selection(selection);
+    h.run_steps(2);
+    let count = h.state().session.doc().unwrap().entity_count();
+    let prompt = h.state().session.prompt_text();
+    let outside = h.state().canvas.rect.unwrap().max - vec2(90.0, 180.0);
+    click_at(&mut h, outside);
+    assert_eq!(h.state().session.doc().unwrap().entity_count(), count);
+    assert_eq!(h.state().session.prompt_text(), prompt);
+    assert_eq!(h.state().ui.dialog.as_deref(), Some("attedit"));
+}
+
+#[test]
+fn modal_tab_navigation_is_not_rewritten_as_command_text() {
+    for modal in [false, true] {
+        let ctx = egui::Context::default();
+        let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
+            if modal {
+                egui::Modal::new(egui::Id::new("test_modal_tab")).show(ui.ctx(), |ui| {
+                    ui.label("Modal");
+                });
+            }
+        });
+        output.textures_delta.clear();
+        let mut raw = egui::RawInput::default();
+        raw.events.push(Event::Key { key: Key::Tab, physical_key: Some(Key::Tab), pressed: true, repeat: false, modifiers: Modifiers::NONE });
+        crate::cmdline::capture_tab(&ctx, &mut raw);
+        if modal {
+            assert!(matches!(raw.events.first(), Some(Event::Key { key: Key::Tab, .. })));
+        } else {
+            assert!(matches!(raw.events.first(),Some(Event::Text(t)) if t == "\t"));
+        }
+    }
 }
 
 #[test]

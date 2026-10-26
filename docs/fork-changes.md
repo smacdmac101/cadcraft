@@ -857,3 +857,48 @@ layers and wasm), with 2,364 tests passed, none failed or ignored. The complete
 staged inverse patch passed git apply --reverse --check. The three new regression
 tests, Windows build/editor edit, saved DXF/DWG checks and AutoCAD native editor
 readback above complete this narrowly scoped value-edit alignment fix.
+
+## CC-047 — isolate attribute-editor input from the drawing
+
+Trigger/reference: AutoCAD 2027 Enhanced Attribute Editor remains open when its
+underlying drawing is clicked, without starting a selection. A full CADCraft UI
+regression failed before this fix because the same outside click set pending_window.
+A separate Cancel-over-canvas check already passed before the fix; Cancel alone is
+not recorded as a confirmed defect.
+
+Change: a modal input shield surrounds the existing attribute window. Outside
+clicks do not dismiss it or reach the drawing/ribbon. Drawing shortcuts, command
+typing and command Escape handling pause while ATTEDIT drafts are open; the editor
+retains field editing, Apply, Cancel and popup handling. The editor is explicitly
+ordered above its shield: a first candidate let an outside click cover the editor's
+controls, reproduced by extending the regression to click Cancel afterward.
+Tab keeps native focus navigation while an egui modal is active instead of becoming
+command-line completion text. This correction applies to other egui modals too;
+ordinary command-line Tab conversion remains unchanged.
+
+Files: ui-egui/src/attributedlg.rs and attributedlg/tests.rs, cmdline.rs, menus.rs;
+this ledger and UI/inventory records. Five new checks cover outside selection and
+subsequent Cancel, Cancel over canvas, Delete/F7/command typing and resumption,
+an active LINE command, and modal versus ordinary Tab processing. Existing
+value/format tests remain.
+
+Dependencies/reversal: builds on CC-005's attribute editor; the Text Options Cancel
+regression uses CC-045. It does not depend on CC-046's export fix. Revert this arc
+to remove its modal shield, ATTEDIT keyboard guards and shared modal Tab correction;
+other editor/value/format behavior stays. Out-of-order reverts of CC-045 require
+retaining this wrapper and adapting its Text Options test. No data migration or
+saved drawing changes. Programmatic commands remain available and existing draft
+staleness handling is retained. Detached native ribbon-window modality has not
+been verified and is not claimed.
+
+Validation: corrected source passed 1,086 focused workspace library/binary and
+attribute integration tests, none failed or ignored, and the Windows build. All six
+cargo xtask ci gates passed (fmt, Clippy, tests, assets, layers and wasm): 2,369
+passed, none failed or ignored. Windows Computer Use confirmed outside clicks keep
+the editor active and selection unchanged, Cancel remains usable afterward, Text
+Options/dropdowns remain usable, and Escape dismisses the dropdown alone. No test
+attribute value was changed. Every GUI build quit normally before another launched;
+all test documents were clean. The same title-bar drag gesture did not move either
+the prior CC-046 build or this build, so native dragging is unverified rather than
+claimed fixed or proved regressed. No private drawing, Autodesk output or asset
+is committed. Inverse-patch verification is recorded with the implementing commit.

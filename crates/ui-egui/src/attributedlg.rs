@@ -68,54 +68,61 @@ pub(crate) fn show(app: &mut CadApp, ctx: &egui::Context) {
     let mut open = true;
     let mut apply = false;
     let mut close = false;
-    egui::Window::new("Edit Attributes").open(&mut open).default_width(520.0).show(ctx, |ui| {
-        ui.label(format!("Block: {}", state.name));
-        ui.horizontal(|ui| {
-            ui.selectable_value(&mut state.text_options, false, "Attribute");
-            ui.selectable_value(&mut state.text_options, true, "Text Options");
-        });
-        ui.separator();
-        ui.add_enabled_ui(!locked, |ui| {
-            if state.text_options {
-                let shown = state.formats.get(state.selected_attribute).map_or("", |f| f.tag.as_str());
-                egui::ComboBox::from_id_salt("attribute_text_target").selected_text(shown).show_ui(ui, |ui| {
-                    for (index, format) in state.formats.iter().enumerate() {
-                        ui.selectable_value(&mut state.selected_attribute, index, &format.tag);
+    // Keep the draggable editor above a modal input shield. Drawing/ribbon clicks must
+    // not select objects or feed a running command while its attribute drafts are open.
+    egui::Modal::new(egui::Id::new("attribute_editor_modal")).frame(egui::Frame::NONE).show(ctx, |modal_ui| {
+        let editor_id = egui::Id::new("Edit Attributes");
+        // Keep the window above its shield even when an outside click raises the modal.
+        ctx.set_sublayer(modal_ui.layer_id(), egui::LayerId::new(egui::Order::Foreground, editor_id));
+        egui::Window::new("Edit Attributes").id(editor_id).order(egui::Order::Foreground).open(&mut open).default_width(520.0).show(ctx, |ui| {
+            ui.label(format!("Block: {}", state.name));
+            ui.horizontal(|ui| {
+                ui.selectable_value(&mut state.text_options, false, "Attribute");
+                ui.selectable_value(&mut state.text_options, true, "Text Options");
+            });
+            ui.separator();
+            ui.add_enabled_ui(!locked, |ui| {
+                if state.text_options {
+                    let shown = state.formats.get(state.selected_attribute).map_or("", |f| f.tag.as_str());
+                    egui::ComboBox::from_id_salt("attribute_text_target").selected_text(shown).show_ui(ui, |ui| {
+                        for (index, format) in state.formats.iter().enumerate() {
+                            ui.selectable_value(&mut state.selected_attribute, index, &format.tag);
+                        }
+                    });
+                    ui.add_space(8.0);
+                    if let Some(format) = state.formats.get_mut(state.selected_attribute) {
+                        format.show(ui, &styles);
                     }
-                });
-                ui.add_space(8.0);
-                if let Some(format) = state.formats.get_mut(state.selected_attribute) {
-                    format.show(ui, &styles);
+                } else {
+                    egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
+                        for (index, (tag, prompt, value, constant)) in state.values.iter_mut().enumerate() {
+                            ui.push_id(index, |ui| {
+                                let label = ui.label(tag.as_str()).on_hover_text(prompt.as_str());
+                                ui.add_enabled(!*constant, egui::TextEdit::singleline(value).desired_width(f32::INFINITY)).labelled_by(label.id);
+                            });
+                        }
+                    });
                 }
-            } else {
-                egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
-                    for (index, (tag, prompt, value, constant)) in state.values.iter_mut().enumerate() {
-                        ui.push_id(index, |ui| {
-                            let label = ui.label(tag.as_str()).on_hover_text(prompt.as_str());
-                            ui.add_enabled(!*constant, egui::TextEdit::singleline(value).desired_width(f32::INFINITY)).labelled_by(label.id);
-                        });
-                    }
-                });
+            });
+            if locked {
+                ui.label("This block reference is on a locked layer.");
             }
-        });
-        if locked {
-            ui.label("This block reference is on a locked layer.");
-        }
-        if let Some(error) = &state.error {
-            ui.colored_label(crate::theme::Tokens::get().text, error);
-        }
-        ui.separator();
-        ui.horizontal(|ui| {
-            if ui.add_enabled(!locked, egui::Button::new("OK")).clicked() {
-                apply = true;
-                close = true;
+            if let Some(error) = &state.error {
+                ui.colored_label(crate::theme::Tokens::get().text, error);
             }
-            if ui.add_enabled(!locked, egui::Button::new("Apply")).clicked() {
-                apply = true;
-            }
-            if ui.button("Cancel").clicked() {
-                close = true;
-            }
+            ui.separator();
+            ui.horizontal(|ui| {
+                if ui.add_enabled(!locked, egui::Button::new("OK")).clicked() {
+                    apply = true;
+                    close = true;
+                }
+                if ui.add_enabled(!locked, egui::Button::new("Apply")).clicked() {
+                    apply = true;
+                }
+                if ui.button("Cancel").clicked() {
+                    close = true;
+                }
+            });
         });
     });
     if apply {
