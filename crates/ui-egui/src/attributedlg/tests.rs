@@ -394,3 +394,120 @@ fn attribute_properties_show_definition_defaults_without_creating_overrides() {
     h.run_steps(3);
     assert!(attribute_props(h.state()).is_empty(), "displaying inherited definition defaults must not materialize per-reference overrides");
 }
+
+fn open_color_picker(h: &mut Harness<'static, CadApp>) {
+    h.get_by_label("Select Color…").click();
+    h.run_steps(4);
+    assert!(h.get_by_label("Apply").accesskit_node().is_disabled());
+    assert_eq!(h.state().ui.dialog.as_deref(), Some("attedit"));
+}
+
+#[test]
+fn color_picker_accepts_only_to_draft_then_parent_apply_is_undoable() {
+    let mut h = harness();
+    h.run_steps(3);
+    h.get_by_label("Properties").click();
+    h.run_steps(3);
+    let original = attribute_props(h.state());
+    for (choice, expected) in [
+        ("ByBlock", cadcraft_color::Color::ByBlock),
+        ("34", cadcraft_color::Color::Index(34)),
+        ("12,34,56", cadcraft_color::Color::True(cadcraft_color::Rgb(12, 34, 56))),
+    ] {
+        open_color_picker(&mut h);
+        if choice == "ByBlock" {
+            h.get_by_label("ByBlock").click();
+            h.run_steps(3);
+        } else {
+            edit_field(&mut h, "Color value", choice);
+        }
+        let before = attribute_props(h.state());
+        h.get_by_label("Use Color").click();
+        h.run_steps(4);
+        assert_eq!(attribute_props(h.state()), before, "picker acceptance is still a draft");
+        assert!(!h.get_by_label("Apply").accesskit_node().is_disabled());
+        h.get_by_label("Apply").click();
+        h.run_steps(3);
+        assert_eq!(attribute_props(h.state()).color, Some(expected));
+    }
+    h.get_by_label("Cancel").click();
+    h.run_steps(3);
+    for expected in [Some(cadcraft_color::Color::Index(34)), Some(cadcraft_color::Color::ByBlock), original.color] {
+        h.state_mut().run("undo", json!({})).unwrap();
+        let EntityKind::Insert(i) = &h.state().session.doc().unwrap().model.iter().find(|e| matches!(e.kind, EntityKind::Insert(_))).unwrap().kind
+        else {
+            panic!("insert")
+        };
+        assert_eq!(i.attribs[0].props.color, expected);
+    }
+}
+
+#[test]
+fn color_picker_cancel_escape_invalid_input_and_parent_cancel_preserve_drawing() {
+    let mut h = harness();
+    h.run_steps(3);
+    h.get_by_label("Properties").click();
+    h.run_steps(3);
+    let original = attribute_props(h.state());
+    for escape in [false, true] {
+        open_color_picker(&mut h);
+        edit_field(&mut h, "Color value", "300,0,0");
+        assert!(h.get_by_label("Use Color").accesskit_node().is_disabled());
+        if escape {
+            h.key_press(Key::Escape);
+        } else {
+            h.get_by_label("Cancel Color").click();
+        }
+        h.run_steps(4);
+        assert_eq!(h.state().ui.dialog.as_deref(), Some("attedit"));
+        assert!(h.query_by_label("Color value").is_none());
+        assert!(!h.get_by_label("Apply").accesskit_node().is_disabled());
+        assert_eq!(attribute_props(h.state()), original);
+    }
+    open_color_picker(&mut h);
+    edit_field(&mut h, "Color value", "#0c2238");
+    h.get_by_label("Use Color").click();
+    h.run_steps(4);
+    open_color_picker(&mut h);
+    assert_eq!(h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Color value").accesskit_node().value().as_deref(), Some("12,34,56"));
+    h.get_by_label("Cancel Color").click();
+    h.run_steps(4);
+    h.get_by_label("Cancel").click();
+    h.run_steps(3);
+    assert!(h.state().ui.dialog.is_none());
+    assert_eq!(attribute_props(h.state()), original);
+}
+
+#[test]
+fn color_picker_rgb_controls_update_draft_and_cancelled_rgb_is_not_reused() {
+    let mut h = harness();
+    h.run_steps(3);
+    h.get_by_label("Properties").click();
+    h.run_steps(3);
+    open_color_picker(&mut h);
+    h.get_by_label("True Color").click();
+    h.run_steps(3);
+    for (channel, value) in [("R", "12"), ("G", "34"), ("B", "56")] {
+        h.get_by_label(channel).click();
+        h.run_steps(2);
+        h.key_press_modifiers(Modifiers::COMMAND, Key::A);
+        h.event(Event::Text(value.into()));
+        h.run_steps(3);
+        h.key_press(Key::Enter);
+        h.run_steps(2);
+    }
+    assert_eq!(h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Color value").accesskit_node().value().as_deref(), Some("12,34,56"));
+    h.get_by_label("Cancel Color").click();
+    h.run_steps(4);
+    open_color_picker(&mut h);
+    h.get_by_label("True Color").click();
+    h.run_steps(3);
+    assert_eq!(h.get_by_label("R").accesskit_node().numeric_value(), Some(255.0));
+    assert_eq!(h.get_by_label("G").accesskit_node().numeric_value(), Some(255.0));
+    assert_eq!(h.get_by_label("B").accesskit_node().numeric_value(), Some(255.0));
+    h.get_by_label("Cancel Color").click();
+    h.run_steps(4);
+    h.get_by_label("Apply").click();
+    h.run_steps(3);
+    assert!(attribute_props(h.state()).is_empty());
+}

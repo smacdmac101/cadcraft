@@ -1023,3 +1023,56 @@ passed all six CI gates (2,381 tests, none failed or ignored). After removing th
 close-deferral addition, the final Windows executable rebuilt and passed blocked/
 restored Line checks. Final-source CI passed all six gates: 2,381 tests passed,
 none failed or ignored; fmt, clippy, assets, layers and wasm passed.
+
+## CC-050 — attribute Select Color draft picker
+
+Reference: AutoCAD 2027 Enhanced Attribute Editor > Properties > Select Color
+opens a nested dialog, with Index Color, True Color and ByLayer/ByBlock choices.
+The parent is disabled; cancelling the color dialog returns to the attribute
+editor without committing a color. The RGB field was edited and cancelled during
+Computer Use on our synthetic block. Color Books contents were not inspected.
+
+Change: an original Select Color picker for the selected attribute's draft,
+reusing CADCraft's generated ACI palette and RGB spectrum/components. A bounded
+color-value field accepts existing names/indexes/hex/RGB syntax; invalid values
+cannot be accepted. Use Color accepts to the draft only. Cancel Color or Escape
+returns to the still-open parent, whose Cancel discards unapplied edits. Apply/OK
+continues through the existing atomic ATTEDIT command and Undo. The parent is
+disabled while picking; ATTEDIT remains active so root/native ribbon input guards
+continue to apply. Each opening resets palette temporary state to the target draft.
+
+The shared palette gets a caller-owned draft mode; its existing layer/ribbon popup
+mode retains Apply true color. RGB component labels now label their number controls
+for accessibility and interaction tests. No engine/file-format/settings migration.
+
+Files: ui-egui/src/attributedlg.rs, attributedlg/{color_picker,properties,tests}.rs,
+ui-egui/src/layers.rs, this ledger and UI parity/inventory records.
+Dependencies/reversal: depends on CC-048's Properties drafts and uses CC-047's
+editor shield. CC-049 guards native windows independently. Revert this whole arc
+to restore the basic color choices/text field; saved attribute colors remain valid.
+Later callers of color_palette_draft must be adapted first. No other callers use
+that new entry point. Existing palette behavior must remain covered when reverting
+its shared implementation. No Autodesk assets, color books or produced files copied.
+
+Remaining differences: this picker uses CADCraft's original spectrum and explicit
+Use Color/Cancel Color labels. It does not implement color books or the
+reference HSL model controls; ByLayer/ByBlock are shown by logical name rather than
+claiming an unverified resolved preview. Live drawing preview is a separate gap.
+Targeted tests, full CI and final-source Windows checks are recorded below.
+
+Windows verification: final-source executable built in 2m35s; prior GUI builds
+closed after confirming all test documents clean. Index palette/True Color fit
+without clipping. Escape returned only to the parent; RGB 12,34,56 updated the
+spectrum/component readouts. Use Color changed only the draft (raw attribute
+properties still inherited color); parent Apply changed only DEVICE_TYPE.
+Cancel retained that applied value. GUI Undo restored its original ByLayer cyan
+and GUI Redo restored RGB. Saved to a separate synthetic DWG and reopened from
+disk: RGB, AttributeTest/DASHED/0.35mm remained and DEVICE_ID had no overrides.
+AutoCAD 2027 opened that CADCraft-generated DWG; native Enhanced Attribute Editor
+read Color 12,34,56 plus the same layer/linetype/lineweight and both values.
+Cancelled without saving an AutoCAD file. Native foreign-file provenance notice
+was acknowledged for this one test output without changing the persistent setting.
+A remaining visual difference was observed: disabling the parent window fades its
+frame/translucency as well as its controls; opaque parent-frame styling is a later
+polish item. Focused attribute-editor suite: 17 passed (three new picker tests).
+Clippy passed after collapsing three conditionals. All six CI gates passed: 2,384 tests passed, none failed or ignored; fmt, clippy, assets, layers and wasm passed.

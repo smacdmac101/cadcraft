@@ -73,6 +73,15 @@ pub fn color_button_resolved(ui: &mut egui::Ui, id: egui::Id, current: Color, re
 
 /// The palette body (index colours + true colour).
 pub fn color_palette(ui: &mut egui::Ui, id: egui::Id, current: Color, by: bool) -> Option<Color> {
+    color_palette_body(ui, id, current, by, false)
+}
+
+/// Palette for a caller-owned draft with its own OK/Cancel actions.
+pub(crate) fn color_palette_draft(ui: &mut egui::Ui, id: egui::Id, current: Color) -> Option<Color> {
+    color_palette_body(ui, id, current, true, true)
+}
+
+fn color_palette_body(ui: &mut egui::Ui, id: egui::Id, current: Color, by: bool, draft: bool) -> Option<Color> {
     let t = Tokens::get();
     let tab_id = id.with("tab");
     let mut tab = ui.data_mut(|d| d.get_temp::<u8>(tab_id)).unwrap_or(if matches!(current, Color::True(_)) { 1 } else { 0 });
@@ -137,19 +146,20 @@ pub fn color_palette(ui: &mut egui::Ui, id: egui::Id, current: Color, by: bool) 
         let rid = id.with("rgb");
         let start = current.resolve(Color::Index(7), Color::Index(7));
         let mut c = ui.data_mut(|d| d.get_temp::<[u8; 3]>(rid)).unwrap_or([start.0, start.1, start.2]);
+        let before = c;
         let mut c32 = Color32::from_rgb(c[0], c[1], c[2]);
         egui::color_picker::color_picker_color32(ui, &mut c32, egui::color_picker::Alpha::Opaque);
         c = [c32.r(), c32.g(), c32.b()];
         ui.horizontal(|ui| {
             for (i, l) in ["R", "G", "B"].iter().enumerate() {
-                ui.label(*l);
+                let label = ui.label(*l);
                 if let Some(v) = c.get_mut(i) {
-                    ui.add(egui::DragValue::new(v).range(0..=255));
+                    ui.add(egui::DragValue::new(v).range(0..=255)).labelled_by(label.id);
                 }
             }
         });
         ui.data_mut(|d| d.insert_temp(rid, c));
-        if ui.button(crate::tl!("Apply true color")).clicked() {
+        if if draft { c != before } else { ui.button(crate::tl!("Apply true color")).clicked() } {
             out = Some(Color::True(cadcraft_color::Rgb(c[0], c[1], c[2])));
             ui.data_mut(|d| d.remove::<[u8; 3]>(rid));
         }

@@ -3,6 +3,7 @@ use cadcraft_doc::{EntityKind, Handle};
 use serde_json::json;
 
 use crate::CadApp;
+mod color_picker;
 mod properties;
 mod text_options;
 
@@ -25,6 +26,7 @@ struct State {
     tab: Tab,
     selected_attribute: usize,
     error: Option<String>,
+    color_picker: Option<color_picker::Picker>,
 }
 
 pub(crate) fn open(app: &mut CadApp, handle: Handle) -> bool {
@@ -71,6 +73,7 @@ pub(crate) fn show(app: &mut CadApp, ctx: &egui::Context) {
         tab: Tab::Attribute,
         selected_attribute: 0,
         error: None,
+        color_picker: None,
     });
     let locked = app.session.doc().ok().is_some_and(|d| d.entity(handle).and_then(|e| d.layer(&e.common.layer)).is_some_and(|l| l.locked));
     let mut styles: Vec<_> = app.session.doc().map(|d| d.text_styles.iter().map(|s| s.name.clone()).collect()).unwrap_or_default();
@@ -88,68 +91,95 @@ pub(crate) fn show(app: &mut CadApp, ctx: &egui::Context) {
     let mut open = true;
     let mut apply = false;
     let mut close = false;
+    let picking_color = state.color_picker.is_some();
+    let mut select_color = false;
     // Keep the draggable editor above a modal input shield. Drawing/ribbon clicks must
     // not select objects or feed a running command while its attribute drafts are open.
     egui::Modal::new(egui::Id::new("attribute_editor_modal")).frame(egui::Frame::NONE).show(ctx, |modal_ui| {
         let editor_id = egui::Id::new("Edit Attributes");
         // Keep the window above its shield even when an outside click raises the modal.
         ctx.set_sublayer(modal_ui.layer_id(), egui::LayerId::new(egui::Order::Foreground, editor_id));
-        egui::Window::new("Edit Attributes").id(editor_id).order(egui::Order::Foreground).open(&mut open).default_width(520.0).show(ctx, |ui| {
-            ui.label(format!("Block: {}", state.name));
-            ui.horizontal(|ui| {
-                ui.selectable_value(&mut state.tab, Tab::Attribute, "Attribute");
-                ui.selectable_value(&mut state.tab, Tab::TextOptions, "Text Options");
-                ui.selectable_value(&mut state.tab, Tab::Properties, "Properties");
-            });
-            ui.separator();
-            ui.add_enabled_ui(!locked, |ui| {
-                if state.tab != Tab::Attribute {
-                    let shown = state.formats.get(state.selected_attribute).map_or("", |f| f.tag.as_str());
-                    egui::ComboBox::from_id_salt("attribute_text_target").selected_text(shown).show_ui(ui, |ui| {
-                        for (index, format) in state.formats.iter().enumerate() {
-                            ui.selectable_value(&mut state.selected_attribute, index, &format.tag);
+        egui::Window::new("Edit Attributes")
+            .id(editor_id)
+            .order(egui::Order::Foreground)
+            .enabled(!picking_color)
+            .open(&mut open)
+            .default_width(520.0)
+            .show(ctx, |ui| {
+                ui.label(format!("Block: {}", state.name));
+                ui.horizontal(|ui| {
+                    ui.selectable_value(&mut state.tab, Tab::Attribute, "Attribute");
+                    ui.selectable_value(&mut state.tab, Tab::TextOptions, "Text Options");
+                    ui.selectable_value(&mut state.tab, Tab::Properties, "Properties");
+                });
+                ui.separator();
+                ui.add_enabled_ui(!locked, |ui| {
+                    if state.tab != Tab::Attribute {
+                        let shown = state.formats.get(state.selected_attribute).map_or("", |f| f.tag.as_str());
+                        egui::ComboBox::from_id_salt("attribute_text_target").selected_text(shown).show_ui(ui, |ui| {
+                            for (index, format) in state.formats.iter().enumerate() {
+                                ui.selectable_value(&mut state.selected_attribute, index, &format.tag);
+                            }
+                        });
+                        ui.add_space(8.0);
+                        if state.tab == Tab::TextOptions {
+                            if let Some(format) = state.formats.get_mut(state.selected_attribute) {
+                                format.show(ui, &styles);
+                            }
+                        } else if let Some(properties) = state.properties.get_mut(state.selected_attribute) {
+                            select_color = properties.show(ui, &layers, &linetypes);
                         }
-                    });
-                    ui.add_space(8.0);
-                    if state.tab == Tab::TextOptions {
-                        if let Some(format) = state.formats.get_mut(state.selected_attribute) {
-                            format.show(ui, &styles);
-                        }
-                    } else if let Some(properties) = state.properties.get_mut(state.selected_attribute) {
-                        properties.show(ui, &layers, &linetypes);
+                    } else {
+                        egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
+                            for (index, (tag, prompt, value, constant)) in state.values.iter_mut().enumerate() {
+                                ui.push_id(index, |ui| {
+                                    let label = ui.label(tag.as_str()).on_hover_text(prompt.as_str());
+                                    ui.add_enabled(!*constant, egui::TextEdit::singleline(value).desired_width(f32::INFINITY)).labelled_by(label.id);
+                                });
+                            }
+                        });
                     }
-                } else {
-                    egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
-                        for (index, (tag, prompt, value, constant)) in state.values.iter_mut().enumerate() {
-                            ui.push_id(index, |ui| {
-                                let label = ui.label(tag.as_str()).on_hover_text(prompt.as_str());
-                                ui.add_enabled(!*constant, egui::TextEdit::singleline(value).desired_width(f32::INFINITY)).labelled_by(label.id);
-                            });
-                        }
-                    });
+                });
+                if locked {
+                    ui.label("This block reference is on a locked layer.");
                 }
+                if let Some(error) = &state.error {
+                    ui.colored_label(crate::theme::Tokens::get().text, error);
+                }
+                ui.separator();
+                ui.horizontal(|ui| {
+                    if ui.add_enabled(!locked, egui::Button::new("OK")).clicked() {
+                        apply = true;
+                        close = true;
+                    }
+                    if ui.add_enabled(!locked, egui::Button::new("Apply")).clicked() {
+                        apply = true;
+                    }
+                    if ui.button("Cancel").clicked() {
+                        close = true;
+                    }
+                });
             });
-            if locked {
-                ui.label("This block reference is on a locked layer.");
-            }
-            if let Some(error) = &state.error {
-                ui.colored_label(crate::theme::Tokens::get().text, error);
-            }
-            ui.separator();
-            ui.horizontal(|ui| {
-                if ui.add_enabled(!locked, egui::Button::new("OK")).clicked() {
-                    apply = true;
-                    close = true;
-                }
-                if ui.add_enabled(!locked, egui::Button::new("Apply")).clicked() {
-                    apply = true;
-                }
-                if ui.button("Cancel").clicked() {
-                    close = true;
-                }
-            });
-        });
     });
+    if select_color
+        && !locked
+        && let Some(properties) = state.properties.get(state.selected_attribute)
+    {
+        state.color_picker = Some(color_picker::Picker::new(ctx, state.selected_attribute, properties.color()));
+    }
+    let color_was_open = picking_color || state.color_picker.is_some();
+    if let Some(picker) = &mut state.color_picker {
+        match picker.show(ctx) {
+            color_picker::Action::Pending => {}
+            color_picker::Action::Cancel => state.color_picker = None,
+            color_picker::Action::Accept(color) => {
+                if !locked && let Some(properties) = state.properties.get_mut(picker.target) {
+                    properties.set_color(color);
+                }
+                state.color_picker = None;
+            }
+        }
+    }
     if apply {
         let values: serde_json::Map<_, _> = state
             .values
@@ -197,7 +227,7 @@ pub(crate) fn show(app: &mut CadApp, ctx: &egui::Context) {
             }
         }
     }
-    if !open || close || ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+    if !open || close || (!color_was_open && ctx.input(|i| i.key_pressed(egui::Key::Escape))) {
         app.ui.dialog = None;
         ctx.data_mut(|d| d.remove::<State>(id));
     } else {

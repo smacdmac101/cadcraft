@@ -36,11 +36,22 @@ impl Properties {
         self.initial.clone_from(&self.draft);
     }
 
-    pub fn show(&mut self, ui: &mut egui::Ui, layers: &[String], linetypes: &[String]) {
+    pub fn color(&self) -> &str {
+        &self.draft[1]
+    }
+
+    pub fn set_color(&mut self, color: cadcraft_color::Color) {
+        if !self.constant {
+            self.draft[1] = color.name();
+        }
+    }
+
+    pub fn show(&mut self, ui: &mut egui::Ui, layers: &[String], linetypes: &[String]) -> bool {
         if self.constant {
             ui.label("Constant attribute properties are read-only.");
-            return;
+            return false;
         }
+        let mut select_color = false;
         egui::Grid::new("attribute_properties").num_columns(2).spacing([16.0, 8.0]).show(ui, |ui| {
             choice(ui, "Layer", &mut self.draft[0], layers.iter().map(String::as_str));
             ui.end_row();
@@ -54,6 +65,7 @@ impl Properties {
                         ui.selectable_value(&mut self.draft[1], color.into(), color);
                     }
                 });
+                select_color = ui.button("Select Color…").clicked();
             });
             ui.end_row();
             let weights: Vec<_> = Lineweight::STANDARD.into_iter().map(|v| Lineweight::Mm100(v).name()).collect();
@@ -63,6 +75,7 @@ impl Properties {
         ui.add_space(8.0);
         ui.label("Color accepts a name, index, #RRGGBB or R,G,B.");
         ui.label("Properties apply to this attribute in this block reference only.");
+        select_color
     }
 }
 
