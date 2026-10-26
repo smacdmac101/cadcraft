@@ -3,6 +3,7 @@ use cadcraft_doc::{EntityKind, Handle};
 use serde_json::json;
 
 use crate::CadApp;
+mod text_options;
 
 #[derive(Clone)]
 struct State {
@@ -10,6 +11,11 @@ struct State {
     handle: Handle,
     name: String,
     values: Vec<(String, String, String, bool)>,
+    initial_values: Vec<String>,
+    formats: Vec<text_options::Format>,
+    text_options: bool,
+    selected_attribute: usize,
+    error: Option<String>,
 }
 
 pub(crate) fn open(app: &mut CadApp, handle: Handle) -> bool {
@@ -36,7 +42,9 @@ pub(crate) fn show(app: &mut CadApp, ctx: &egui::Context) {
     let drawing = app.session.state().map_or(0, |s| s.uid);
     let selected = app.session.state().ok().and_then(|s| s.selection.first().copied());
     let Some((handle, name, attributes)) = selected.and_then(|h| {
-        let EntityKind::Insert(i) = &app.session.doc().ok()?.entity(h)?.kind else { return None };
+        let EntityKind::Insert(i) = &app.session.doc().ok()?.entity(h)?.kind else {
+            return None;
+        };
         Some((h, i.block.clone(), i.attribs.clone()))
     }) else {
         app.ui.dialog = None;
@@ -48,27 +56,61 @@ pub(crate) fn show(app: &mut CadApp, ctx: &egui::Context) {
         handle,
         name: app.session.doc().ok().and_then(|d| cadcraft_doc::dynblock::custom_properties(d, handle)).map_or(name, |(name, _)| name),
         values: attributes.iter().map(|a| (a.tag.clone(), a.prompt.clone(), a.text.value.clone(), a.constant)).collect(),
+        initial_values: attributes.iter().map(|a| a.text.value.clone()).collect(),
+        formats: attributes.iter().map(text_options::Format::new).collect(),
+        text_options: false,
+        selected_attribute: 0,
+        error: None,
     });
+    let locked = app.session.doc().ok().is_some_and(|d| d.entity(handle).and_then(|e| d.layer(&e.common.layer)).is_some_and(|l| l.locked));
+    let mut styles: Vec<_> = app.session.doc().map(|d| d.text_styles.iter().map(|s| s.name.clone()).collect()).unwrap_or_default();
+    styles.sort_by_cached_key(|name| name.to_lowercase());
     let mut open = true;
     let mut apply = false;
     let mut close = false;
     egui::Window::new("Edit Attributes").open(&mut open).default_width(520.0).show(ctx, |ui| {
         ui.label(format!("Block: {}", state.name));
-        egui::ScrollArea::vertical().max_height(420.0).show(ui, |ui| {
-            for (index, (tag, prompt, value, constant)) in state.values.iter_mut().enumerate() {
-                ui.push_id(index, |ui| {
-                    let label = ui.label(tag.as_str()).on_hover_text(prompt.as_str());
-                    ui.add_enabled(!*constant, egui::TextEdit::singleline(value).desired_width(f32::INFINITY)).labelled_by(label.id);
+        ui.horizontal(|ui| {
+            ui.selectable_value(&mut state.text_options, false, "Attribute");
+            ui.selectable_value(&mut state.text_options, true, "Text Options");
+        });
+        ui.separator();
+        ui.add_enabled_ui(!locked, |ui| {
+            if state.text_options {
+                let shown = state.formats.get(state.selected_attribute).map_or("", |f| f.tag.as_str());
+                egui::ComboBox::from_id_salt("attribute_text_target").selected_text(shown).show_ui(ui, |ui| {
+                    for (index, format) in state.formats.iter().enumerate() {
+                        ui.selectable_value(&mut state.selected_attribute, index, &format.tag);
+                    }
+                });
+                ui.add_space(8.0);
+                if let Some(format) = state.formats.get_mut(state.selected_attribute) {
+                    format.show(ui, &styles);
+                }
+            } else {
+                egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
+                    for (index, (tag, prompt, value, constant)) in state.values.iter_mut().enumerate() {
+                        ui.push_id(index, |ui| {
+                            let label = ui.label(tag.as_str()).on_hover_text(prompt.as_str());
+                            ui.add_enabled(!*constant, egui::TextEdit::singleline(value).desired_width(f32::INFINITY)).labelled_by(label.id);
+                        });
+                    }
                 });
             }
         });
+        if locked {
+            ui.label("This block reference is on a locked layer.");
+        }
+        if let Some(error) = &state.error {
+            ui.colored_label(crate::theme::Tokens::get().text, error);
+        }
         ui.separator();
         ui.horizontal(|ui| {
-            if ui.button("OK").clicked() {
+            if ui.add_enabled(!locked, egui::Button::new("OK")).clicked() {
                 apply = true;
                 close = true;
             }
-            if ui.button("Apply").clicked() {
+            if ui.add_enabled(!locked, egui::Button::new("Apply")).clicked() {
                 apply = true;
             }
             if ui.button("Cancel").clicked() {
@@ -80,11 +122,36 @@ pub(crate) fn show(app: &mut CadApp, ctx: &egui::Context) {
         let values: serde_json::Map<_, _> = state
             .values
             .iter()
-            .filter(|(tag, _, value, constant)| !constant && attributes.iter().any(|a| a.tag == *tag && a.text.value != *value))
-            .map(|(tag, _, value, _)| (tag.clone(), json!(value)))
+            .enumerate()
+            .filter(|(index, (tag, _, value, constant))| {
+                !constant && state.initial_values.get(*index) != Some(value) && attributes.iter().any(|a| a.tag == *tag && a.text.value != *value)
+            })
+            .map(|(_, (tag, _, value, _))| (tag.clone(), json!(value)))
             .collect();
-        if !values.is_empty() && app.run("attedit", json!({"handle": handle.hex(), "values": values})).is_err() {
+        let formats = state.formats.iter().try_fold(serde_json::Map::new(), |mut out, format| {
+            let fields = format.pending()?;
+            if !fields.is_empty() {
+                out.insert(format.tag.clone(), json!(fields));
+            }
+            Ok::<_, String>(out)
+        });
+        state.error = match formats {
+            Err(error) => Some(error),
+            Ok(formats) => {
+                if values.is_empty() && formats.is_empty() {
+                    None
+                } else {
+                    app.run("attedit", json!({"handle": handle.hex(), "values": values, "formats":formats})).err()
+                }
+            }
+        };
+        if state.error.is_some() {
             close = false;
+        } else {
+            state.initial_values = state.values.iter().map(|(_, _, value, _)| value.clone()).collect();
+            for format in &mut state.formats {
+                format.applied();
+            }
         }
     }
     if !open || close || ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
@@ -96,64 +163,4 @@ pub(crate) fn show(app: &mut CadApp, ctx: &egui::Context) {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::Services;
-    use cadcraft_engine::Session;
-    use egui::{Event, Key, Modifiers, vec2};
-    use egui_kittest::Harness;
-    use egui_kittest::kittest::Queryable;
-
-    fn harness() -> Harness<'static, CadApp> {
-        let mut app = CadApp::new(Session::default(), Services::default());
-        app.run("attdef", json!({"tag":"DEVICE_TYPE", "default":"POWER ADAPTER", "at":[0,0], "height":1})).unwrap();
-        let handles: Vec<_> = app.session.doc().unwrap().model.iter().map(|e| e.handle.hex()).collect();
-        app.run("block", json!({"name":"Equipment", "handles":handles, "base":[0,0], "keep":"delete"})).unwrap();
-        let inserted = app.run("insert", json!({"name":"Equipment", "at":[0,0]})).unwrap();
-        app.run("select", json!({"handles":[inserted["handle"]]})).unwrap();
-        app.start("eattedit");
-        assert_eq!(app.ui.dialog.as_deref(), Some("attedit"));
-        Harness::builder().with_size(vec2(800.0, 600.0)).build_ui_state(|ui, app| show(app, ui.ctx()), app)
-    }
-
-    fn value(app: &CadApp) -> String {
-        let s = app.session.state().unwrap();
-        let EntityKind::Insert(i) = &s.doc.model.iter().find(|e| matches!(e.kind, EntityKind::Insert(_))).unwrap().kind else { panic!("insert") };
-        i.attribs[0].text.value.clone()
-    }
-
-    #[test]
-    fn attribute_dialog_applies_values_and_undo_restores_them() {
-        let mut h = harness();
-        h.run_steps(3);
-        h.get_by_role_and_label(egui::accesskit::Role::TextInput, "DEVICE_TYPE").click();
-        h.run_steps(2);
-        h.key_press_modifiers(Modifiers::COMMAND, Key::A);
-        h.event(Event::Text("Replacement".into()));
-        h.run_steps(2);
-        h.get_by_label("Apply").click();
-        h.run_steps(3);
-        assert_eq!(value(h.state()), "Replacement");
-        h.get_by_label("Cancel").click();
-        h.run_steps(2);
-        h.state_mut().run("undo", json!({})).unwrap();
-        assert_eq!(value(h.state()), "POWER ADAPTER");
-    }
-
-    #[test]
-    fn attribute_dialog_cancel_discards_unapplied_values() {
-        let mut h = harness();
-        h.run_steps(3);
-        h.get_by_role_and_label(egui::accesskit::Role::TextInput, "DEVICE_TYPE").click();
-        h.run_steps(2);
-        h.key_press_modifiers(Modifiers::COMMAND, Key::A);
-        h.event(Event::Text("Do not keep".into()));
-        h.run_steps(2);
-        h.get_by_label("Cancel").click();
-        h.run_steps(2);
-        assert_eq!(value(h.state()), "POWER ADAPTER");
-        h.state_mut().run("attedit", json!({"values":{"DEVICE_TYPE":"Scripted"}})).unwrap();
-        assert_eq!(value(h.state()), "Scripted");
-        assert!(h.state().ui.dialog.is_none(), "JSON edits never open a dialog");
-    }
-}
+mod tests;

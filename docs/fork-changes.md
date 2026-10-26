@@ -666,3 +666,127 @@ not the identity of a listening server. No production code changes were needed.
 Final validation: all six cargo xtask ci gates passed (fmt, clippy, 2,351 tests
 with zero failures/ignored, assets, layers, WebAssembly). The inverse-patch dry run
 passed before publication. This test-only arc requires no new GUI build.
+
+## CC-045 — per-reference attribute Text Options
+
+Trigger: CC-005 exposed values but no text-format controls. Live Computer Use in
+AutoCAD 2027 on a disposable two-attribute Equipment block confirmed Attribute,
+Text Options and Properties tabs. Text Options exposes style, justification,
+height, width factor, rotation, oblique, Backwards/Upside down, annotation and
+boundary width (disabled for single-line attributes). Height 3 to 4 previewed
+before Apply; Apply then Cancel retained 4. A later Top center change was discarded
+by Cancel. Undo restored the original height after the cancelled-preview undo group.
+The CADCraft-generated fixture was never saved by AutoCAD. No Autodesk output,
+assets/fonts or private drawings are included.
+
+Change: ATTEDIT accepts formats keyed by attribute tag, with loaded textStyle,
+height, widthFactor, rotation/oblique in degrees and justification. All formats
+validate before any value edit. Names match without case, styles use canonical
+loaded names, and requested-tag indexing scans a reference once with bounded input.
+Unknown/ambiguous/duplicate tags, unknown fields, invalid numeric ranges, constant
+or multiline formatting and locked/noneditable targets fail without partial edits.
+Normal justification switches retain the existing alignment anchor, including its
+Z coordinate. Actual placement, unedited formatting, block definition, other attributes/instances,
+properties and modes are preserved unless explicitly edited. Values and formats
+share one command/Undo/Redo operation and existing DXF serialization.
+
+The editor retains the existing value fields in Attribute and adds Text Options
+with an attribute target, style/justification selectors and numeric fields. Locked
+references are read-only. Invalid input keeps the editor open with an explanation.
+Apply tracks explicit draft changes, so unchanged drafts do not replay prior edits
+after external edits; Undo clears selection and closes the editor as before. Cancel
+discards unapplied values/options. No new file-format
+fields or migration are introduced. New editor labels currently use English, as did
+the existing attribute editor; full localization remains open.
+
+Files: engine cmd/blocks.rs, blocks/attedit.rs, blocks/attedit_format.rs and
+tests/attribute_text_options.rs; ui-egui attributedlg.rs and
+attributedlg/text_options.rs and attributedlg/tests.rs; this ledger and the GUI/UI parity records.
+
+Dependencies/reversal: CC-005 attribute dialog and CC-003 attribute import alignment.
+No dependency on CC-043's standalone-text properties.set field. Revert this feature
+commit to remove formats support and the Text Options editor/tests and restore the
+previous value editor. Later formats callers must be adapted first. Existing drawing
+fields are reused; reverting code does not undo edits already saved in drawings.
+The value command also now refuses locked or out-of-working-set references.
+
+Remaining differences: Apply-time editing rather than live preview; per-attribute
+Backwards/Upside-down flags and annotation context, multiline formatting/boundary
+width and a Properties tab require separate support. New Align/Fit placement needs
+two points and is disabled; existing modes remain unchanged until explicitly switched
+to an ordinary justification. Existing per-object fields are preserved on style change;
+complete fixed-height/style-effect inheritance remains a comparison item. Font
+appearance depends on installed fonts. Validation results follow below.
+
+Documentation also corrects the CC-043 UI-journal row to retain its three-column
+layout; no CC-043 behavior changes.
+
+Compatibility refinement: the first full run passed fmt/clippy and stopped at an
+overly strict round-trip assertion. The existing writer intentionally computes a
+justified attribute's derived group-10 baseline while preserving its group-11
+placement. The revised test checks every other field and exact rendered primitives,
+vertices, triangles and bounds, permitting only that derived XY normalization.
+Source review then found that a small metric edit of an imported justified attribute
+could leave the cached baseline within the writer's font-substitution tolerance.
+A new regression failed before the fix: height 5 to 5.5 exported the old baseline
+(103.52072594216368, 198.56859045531334), rather than the scaled-offset result
+(103.62638837486627, 198.0522444200878). Formatting now invalidates that derived XY
+cache for ordinary justified text so existing DXF/DWG export recomputes it; the
+actual alignment anchor and Z fields remain intact. Align/Fit's two placement points
+are preserved. No writer tolerance or import behavior was changed.
+
+The editor tests were also corrected to respect existing Undo selection clearing:
+Undo closes the editor when its selected reference disappears. An external ATTEDIT
+while selection remains now tests stale-draft protection; subsequent Undo checks
+prove a no-op Apply adds no undo record. Unit tests are extracted to
+ui-egui/src/attributedlg/tests.rs; no public UI API is added. Additional regressions
+cover oversized requests, ambiguous tags, nonzero-Z anchors and loaded Align/Fit
+points. Focused rerun/full-gate and Windows GUI results follow below.
+
+Focused rerun passed 1,078 tests: workspace library/binary unit tests plus seven
+attribute engine regressions, including all five attribute-editor interaction tests.
+The previously failing baseline-export regression passed after cache invalidation.
+The numeric interface accepts finite positive height <= 1e12 and width factor <= 100,
+rotation within +/-1e9 degrees and oblique within +/-85 degrees; a request is limited
+to 4,096 format tags. These are command validation bounds, not a claim that every
+AutoCAD numeric-expression syntax is supported. The older CC-043 app had three clean
+documents, exited normally, and no CADCraft process remained before the new GUI build.
+Full quality gates and live Windows checks remain pending.
+
+Windows verification: cargo build --workspace --bins --locked -j4 passed. Live GUI
+changed DEVICE_TYPE from height 3/Left to height 4/Top center using Text Options,
+then Apply. The title centered on the vertical guide with its top at the horizontal
+guide; DEVICE_ID stayed height 3/Left/Baseline. Cancel retained the applied change,
+and one GUI Undo restored original placement. Control-channel Redo prepared export.
+CADCraft saved and reopened synthetic DXF and DWG: the title retained height 4,
+center/top and anchor (0,15,0), and the other attribute remained unchanged.
+AutoCAD 2027 opened the CADCraft-produced DWG with the same installed Arial font:
+the title's top and center matched the green placement guides, and the ID retained
+its lower left-baseline position. AutoCAD did not save the drawing. No font, private
+file or Autodesk output is included.
+
+Separate follow-up observations: direct filled-TrueType attribute double-click did
+not open the editor on this attribute-only fixture in either application's exported
+DWG check; ribbon-based editing was verified in CADCraft. This is an unconfirmed
+picking/fixture issue, not a claimed CADCraft-only regression. Closing the editor
+also briefly started a crossing-selection rectangle beneath the old Cancel button;
+Escape cleared it. General dialog-to-canvas input isolation needs its own fix/test.
+The final full quality-gate run is in progress; results will be appended.
+Additional live check: reopening the saved DXF populated Standard, Top center,
+height 4, width factor 1 and zero angles. Entering NaN for height and pressing OK
+kept the editor open with a finite-number error; the drawing stayed unchanged.
+Escape discarded the invalid draft. The analogous atomic combined value/error
+behavior is covered by the editor regression tests.
+
+The matched-file check also reproduced a separate pre-existing value-only export
+problem: POWER ADAPTER to POWER ADAPTOR retained baseline X -24.511247443762777,
+where recomputing for that same edited text gave -24.82072256305385. The placement
+anchor stayed (0,15,0). This affects value edits independently of the new formatting
+controls and is the next separate regression/fix arc; CC-045 does not claim to fix it.
+
+Final validation: cargo xtask ci passed all six gates (fmt, Clippy, tests, assets,
+layers and wasm): 2,361 tests passed, none failed or ignored. The final staged
+inverse patch passed git apply --reverse --check. The Windows build, editor GUI,
+invalid-input check, synthetic DXF/DWG reopen and AutoCAD DWG guide comparison
+above complete this feature arc. Remaining differences and independently reproduced
+follow-ups stay explicitly open.

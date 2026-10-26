@@ -19,7 +19,7 @@ pub(super) fn attedit_spec() -> CommandSpec {
     CommandSpec::new("attedit", "Single...", run)
         .menu(&["Modify", "Object", "Attribute", "Single..."])
         .alias(&["ate", "eattedit"])
-        .params("{handle, values: {TAG: value} (tags in any case)} → {changed, unknownTags?}")
+        .params("{handle, values?: {TAG: value}, formats?: {TAG: {textStyle?, height?, widthFactor?, rotation? (degrees), oblique? (degrees, -85..85), justify? (L/C/R/M/TL/TC/TR/ML/MC/MR/BL/BC/BR)}} (tags in any case; text options require nonconstant single-line attributes) → {changed, unknownTags?}")
         .interactive(|_| Ok(Box::new(AtteditM::default())))
 }
 
@@ -62,12 +62,24 @@ pub(super) fn with_unknown_tags(s: &Session, h: Handle, values: &Map<String, Val
 fn run(s: &mut Session, p: &Value) -> Result<Value> {
     let h = targets(s, p)?.first().copied().ok_or_else(|| bad("attedit", "`handle` is required"))?;
     let vals = p.get("values").and_then(Value::as_object).cloned().unwrap_or_default();
+    let formats = super::attedit_format::prepare(s.doc()?, h, p.get("formats"))?;
+    if (!vals.is_empty() || !formats.is_empty()) && crate::cmd::curves::is_locked(s, h) {
+        return Err(bad("attedit", "the reference is on a locked layer or outside the editable working set"));
+    }
     let mut n = 0;
     s.doc_mut()?.modify_entity(h, |e| {
         if let EntityKind::Insert(i) = &mut e.kind {
-            for a in &mut i.attribs {
+            for (index, a) in i.attribs.iter_mut().enumerate() {
+                let mut changed = false;
+                if let Some(text) = formats.get(&index) {
+                    changed = a.text != *text;
+                    a.text.clone_from(text);
+                }
                 if let Some(v) = value_for(&vals, &a.tag) {
                     a.text.value = v;
+                    changed = true;
+                }
+                if changed {
                     n += 1;
                 }
             }
