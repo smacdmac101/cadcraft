@@ -164,6 +164,10 @@ pub(in crate::ribbon) fn show_window(
         .with_window_level(if focused { WindowLevel::AlwaysOnTop } else { WindowLevel::Normal });
     let mut geometry = Geometry::default();
     ctx.show_viewport_immediate(id, builder, |ui, class| {
+        let editing_attributes = app.ui.dialog.as_deref() == Some("attedit");
+        if editing_attributes {
+            ui.disable();
+        }
         if class == egui::ViewportClass::EmbeddedWindow {
             render(app, ui, clicked);
             return;
@@ -174,6 +178,14 @@ pub(in crate::ribbon) fn show_window(
             child.send_viewport_cmd_to(ViewportId::ROOT, ViewportCommand::Focus);
             child.request_repaint_of(ViewportId::ROOT);
             return;
+        }
+        if editing_attributes {
+            // A popup opened before the root editor is a separate egui area. Disable
+            // its input too, without closing popups in other viewports (the editor).
+            child.input_mut(|input| {
+                input.pointer = Default::default();
+                input.events.clear();
+            });
         }
         crate::menus::shortcuts(app, &child);
         crate::cmdline::keyboard(app, &child);

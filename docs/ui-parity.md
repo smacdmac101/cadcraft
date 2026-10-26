@@ -1,6 +1,6 @@
 # UI parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-25 · **Change:** minor (selection-aware ribbon styles, attribute Text Options/Properties, value-edit export alignment and editor input isolation) · **Target:** Autodesk AutoCAD 2027 for Mac (26.0), with the focused Windows pass below
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-26 · **Change:** minor (attribute Properties and native floating-ribbon editor input guard) · **Target:** Autodesk AutoCAD 2027 for Mac (26.0), with the focused Windows pass below
 
 How CADCraft's interaction compares with AutoCAD's: point entry, object snaps, tracking, dynamic
 input, grips, selection, the command line, chrome and navigation. A drafter's speed in AutoCAD
@@ -196,7 +196,7 @@ Next comparisons, in order:
    File-format support does not establish an equivalent interactive editor.
 3. Multiple selected block references: common attribute values, mixed-value feedback and one-step
    Undo. The current Properties implementation deliberately handles one reference.
-4. CC-048 adds per-attribute layer, colour, linetype and lineweight overrides, separate from the enclosing block. Direct DWG and DXF-reopened DWG settings were read back in AutoCAD 2027. Live preview, a full color picker and plot-style support remain open. Detached native ribbon tools can still start a command during the attribute editor; root-window input is shielded by CC-047.
+4. CC-048 adds per-attribute layer, colour, linetype and lineweight overrides, separate from the enclosing block. Direct DWG and DXF-reopened DWG settings were read back in AutoCAD 2027. Live preview, a full color picker and plot-style support remain open. CC-047 shields root-window input; CC-049 guards tool/menu input in native floating ribbon windows during the attribute editor.
 
 Public behavior reference: [AutoCAD 2027 Enhanced Attribute Editor](https://help.autodesk.com/cloudhelp/2027/ENU/AutoCAD-Core/files/GUID-414DC467-291B-4A52-A70D-1165CDEA8B39.htm).
 No Autodesk assets or private drawing fixtures are included in the repository.
@@ -296,3 +296,4 @@ the public [docking reference](https://help.autodesk.com/view/ACD/2027/ENU/?caas
 | 2026-10-25 | minor | CC-046: refresh ordinary justified attribute export baselines after real value edits through all ATTEDIT/-ATTEDIT routes; preserve no-op font offsets and Left/Aligned/Fit placement points. |
 | 2026-10-25 | minor | CC-047: modal attribute-editor input shield, drawing shortcut/typing guards and modal Tab focus navigation; full-window regressions distinguish outside-click selection from already-working Cancel. |
 | 2026-10-26 | minor | CC-048: attribute Properties tab, atomic per-tag ATTEDIT property overrides, inheritance/no-op preservation, loaded table choices and bounded color/lineweight validation; AutoCAD DWG property readback verified; full color picker/live preview/plot styles remain open. |
+| 2026-10-26 | minor | CC-049: native floating-panel and whole-ribbon tool/menu input guard during attribute editing, including already-open popups; root dropdowns and normal tool use after Cancel remain available. |

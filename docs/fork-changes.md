@@ -974,3 +974,52 @@ saved DWG, opening Properties and Cancel were rechecked in that executable.
 Detached native ribbon mouse input during this editor remains a
 confirmed separate gap: clicking Line starts a background command while the editor
 stays open. CC-047 protects the root window; it does not cover that native child.
+
+## CC-049 — floating ribbon input guard during attribute editing
+
+Reference: AutoCAD 2027's detached Properties panel becomes gray during Enhanced
+Attribute Editor. Clicking its color dropdown does not open a menu or change the
+drawing; Cancel restores the enabled controls. Checked through Computer Use on an
+own synthetic drawing, without saving an AutoCAD-produced file.
+
+Before: CADCraft's detached Home / Draw panel could start LINE while Edit Attributes
+remained open. The root-window input shield did not extend to another OS viewport.
+Change: the shared native ribbon callback disables panel contents during ATTEDIT,
+including whole-ribbon tools and Return to Ribbon. Pointer/text events in that child
+are withheld so a popup opened earlier cannot bypass the disabled parent. Root
+viewport popups are retained. Normal tools resume when the editor closes. This is an
+application input guard, not an OS-wide modal window implementation; window moving
+and resizing remain native-host behavior. Other dialogs are outside this change.
+
+Files: ui-egui/src/ribbon/floating/native.rs and tests/native_ribbon_viewports.rs;
+this ledger and UI parity/inventory records. No drawing or settings migration.
+
+Dependencies/reversal: uses CC-028/031's native viewports and CC-047's ATTEDIT state
+and root shield. Independent of CC-048's Properties tab. Revert the complete arc to
+restore earlier native child tool input; attribute editing, formatting,
+saved properties and normal ribbon geometry remain. Later changes that rely on
+this shared callback guard must be adapted or reversed first. Reversal does not
+modify saved drawings or ribbon placement.
+
+Focused native-viewport suite: 16 passed, none failed or ignored. New regressions
+cover both floating forms, blocked clicks, re-enabled LINE, an
+already-open color popup and retention of a real root popup. The tool regression
+failed before the fix. The first whole-ribbon test used its compact layout (which
+has a Draw launcher rather than an inline Line button); it now uses a wide ribbon
+to test the actual tool. The root-popup test keeps a real popup alive each frame,
+rather than asserting on an expired unrendered popup.
+
+Windows checks: a detached Draw panel and a wide whole-ribbon window both turn gray
+during Edit Attributes; clicking Line leaves `running` empty and the editor open.
+The root Properties layer dropdown remains usable. The final executable was also rechecked: after Cancel, detached Line
+starts normally and can be cancelled without adding geometry. All prior GUI builds
+were closed before this build started. The native close-button attempt retained
+both windows and a responsive command API, but Computer Use returned `no monitor
+found for window` for root capture and again after reselecting the root. Restarting
+the clean test instance recovered capture. Consequently native close deferral is
+not included in the final change: native close handling retains its prior behavior.
+Normal whole-ribbon closing after Cancel was verified on Windows. The first candidate
+passed all six CI gates (2,381 tests, none failed or ignored). After removing the
+close-deferral addition, the final Windows executable rebuilt and passed blocked/
+restored Line checks. Final-source CI passed all six gates: 2,381 tests passed,
+none failed or ignored; fmt, clippy, assets, layers and wasm passed.

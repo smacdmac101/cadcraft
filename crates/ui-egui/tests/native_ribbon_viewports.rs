@@ -21,6 +21,7 @@ struct Host {
     commands: Vec<ViewportCommand>,
     titles: Vec<String>,
     position: Pos2,
+    root_popup: Option<egui::Id>,
 }
 
 fn host() -> (Context, Rc<RefCell<Host>>) {
@@ -87,6 +88,7 @@ fn host() -> (Context, Rc<RefCell<Host>>) {
 }
 
 fn frame(ctx: &Context, host: &Rc<RefCell<Host>>, app: &mut CadApp) {
+    let root_popup = host.borrow().root_popup;
     let input = RawInput {
         viewports: host.borrow().viewports.clone(),
         screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 800.0))),
@@ -95,6 +97,11 @@ fn frame(ctx: &Context, host: &Rc<RefCell<Host>>, app: &mut CadApp) {
     let mut output = ctx.run_ui(input, |ui| {
         ribbon::sync_native_desktop(ui.ctx(), Vec::new());
         ribbon::show(app, ui);
+        if let Some(id) = root_popup {
+            egui::Popup::new(id, ui.ctx().clone(), egui::pos2(900.0, 700.0), ui.layer_id()).open_memory(None).show(|ui| {
+                ui.label("Root editor choices");
+            });
+        }
     });
     output.textures_delta.clear();
     let mut h = host.borrow_mut();
@@ -132,6 +139,90 @@ fn elements(app: &mut CadApp, ctx: &Context, label: &str) -> Value {
     let (request, _) = ControlRequest::new("ui.elements", json!({"label":label}));
     let Outcome::Done(value) = control::handle(app, ctx, &request) else { panic!("Expected elements") };
     value["result"][0].clone()
+}
+
+#[test]
+fn attribute_editor_blocks_detached_panel_and_whole_ribbon_tools_until_closed() {
+    for whole in [false, true] {
+        let (ctx, host) = host();
+        let mut app = app();
+        if whole {
+            app.run("ui.ribbon.return", json!({"tab":"home","panel":"draw"})).unwrap();
+            app.run("ui.ribbon.window", json!({"floating":true,"size":[1000,520]})).unwrap();
+        }
+        for _ in 0..6 {
+            frame(&ctx, &host, &mut app);
+        }
+        app.ui.dialog = Some("attedit".into());
+        frame(&ctx, &host, &mut app);
+        let tool = elements(&mut app, &ctx, "Ribbon / Draw: Line");
+        assert_eq!(tool["enabled"], false, "whole ribbon: {whole}");
+        let r = tool["rect"].as_array().unwrap();
+        let pos = egui::pos2(r[0].as_f64().unwrap() as f32 + 20.0, r[1].as_f64().unwrap() as f32 + 20.0);
+        for pressed in [true, false] {
+            host.borrow_mut().events = vec![
+                Event::PointerMoved(pos),
+                Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE },
+            ];
+            frame(&ctx, &host, &mut app);
+        }
+        assert!(!app.session.prompt_text().starts_with("LINE"));
+        assert_eq!(app.ui.dialog.as_deref(), Some("attedit"));
+        app.ui.dialog = None;
+        frame(&ctx, &host, &mut app);
+        assert_eq!(elements(&mut app, &ctx, "Ribbon / Draw: Line")["enabled"], true);
+        for pressed in [true, false] {
+            host.borrow_mut().events = vec![
+                Event::PointerMoved(pos),
+                Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE },
+            ];
+            frame(&ctx, &host, &mut app);
+        }
+        assert!(app.session.prompt_text().starts_with("LINE Specify first point"));
+    }
+}
+
+#[test]
+fn attribute_editor_blocks_an_existing_native_color_popup_without_closing_root_popups() {
+    let (ctx, host) = host();
+    let mut app = CadApp::new(Session::default(), Services::default());
+    app.run("new", json!({})).unwrap();
+    app.run("ribbon", json!({})).unwrap();
+    app.run("ui.ribbon.float", json!({"tab":"home","panel":"properties"})).unwrap();
+    for _ in 0..5 {
+        frame(&ctx, &host, &mut app);
+    }
+    let click = |app: &mut CadApp, label: &str| {
+        let tool = elements(app, &ctx, label);
+        let r = tool["rect"].as_array().unwrap();
+        let pos = egui::pos2(r[0].as_f64().unwrap() as f32 + 5.0, r[1].as_f64().unwrap() as f32 + 5.0);
+        for pressed in [true, false] {
+            host.borrow_mut().events = vec![
+                Event::PointerMoved(pos),
+                Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE },
+            ];
+            frame(&ctx, &host, app);
+        }
+        for _ in 0..4 {
+            frame(&ctx, &host, app);
+        }
+    };
+    click(&mut app, "Ribbon Color");
+    assert!(!elements(&mut app, &ctx, "Ribbon Color / Red").is_null());
+    let root_popup = egui::Id::new("attribute-editor-root-popup");
+    host.borrow_mut().root_popup = Some(root_popup);
+    egui::Popup::open_id(&ctx, root_popup);
+    app.ui.dialog = Some("attedit".into());
+    frame(&ctx, &host, &mut app);
+    click(&mut app, "Ribbon Color / Red");
+    assert_eq!(app.session.doc().unwrap().header.i64("CECOLOR", 256), 256);
+    assert!(egui::Popup::is_id_open(&ctx, root_popup));
+    app.ui.dialog = None;
+    host.borrow_mut().root_popup = None;
+    egui::Popup::close_id(&ctx, root_popup);
+    frame(&ctx, &host, &mut app);
+    click(&mut app, "Ribbon Color / Red");
+    assert_eq!(app.session.doc().unwrap().header.i64("CECOLOR", 256), 1);
 }
 
 #[test]
