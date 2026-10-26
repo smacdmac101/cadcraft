@@ -790,3 +790,70 @@ inverse patch passed git apply --reverse --check. The Windows build, editor GUI,
 invalid-input check, synthetic DXF/DWG reopen and AutoCAD DWG guide comparison
 above complete this feature arc. Remaining differences and independently reproduced
 follow-ups stay explicitly open.
+
+## CC-046 — refresh justified attribute placement after value edits
+
+Trigger: the CC-045 matched-file pass reproduced a pre-existing small value-edit
+export defect. Changing POWER ADAPTER to POWER ADAPTOR retained baseline X
+-24.511247443762777 instead of recomputed -24.82072256305385 with the same Arial,
+height 4 and Top center anchor (0,15,0). The renderer used the anchor correctly,
+but the saved baseline could remain within the writer's font-substitution tolerance.
+
+A standalone synthetic regression failed before the fix: a rotated/scaled title
+changed to POWER ADAPTER. exported baseline (57.86231594830153, 203.38460969082652)
+instead of (56.73648292338176, 202.73460969082652), independently calculated from
+font placement. No private drawing, external font or AutoCAD-produced file is used.
+
+Change: the shared attribute-value setter invalidates the ordinary justified text's
+derived baseline XY only when its value actually changes. JSON ATTEDIT (the dialog
+route), interactive ATTEDIT and both global -ATTEDIT forms use it. The existing
+DXF/DWG writer then recomputes the baseline without changing its font tolerance.
+No-op edits retain imported font placement; Left/Baseline and Aligned/Fit placement
+points remain intact. The actual alignment point and insertion/alignment Z values
+are preserved. Legacy changed counts, tag matching and command syntax are retained.
+
+Files: engine/src/cmd/blocks/attedit.rs; engine/tests/attribute_value_baseline.rs;
+this ledger and the GUI/UI parity records. Regression checks cover all four value
+routes, both saved formats, Undo/Redo, nonzero-Z anchors, other attributes/instances
+and definitions, no-op font offsets and Left/Aligned/Fit point preservation.
+
+Dependencies/reversal: uses the pre-existing attribute model and baseline-cache
+convention from upstream import/export handling. It does not require CC-045 formats
+or its editor UI: test fixtures initialize existing document fields directly.
+Revert this commit to remove only value-change cache refresh and its tests.
+CC-045 formatting cache refresh remains separate. Both commits touch attedit.rs;
+reversing CC-045 first may need context resolution that retains CC-046's value
+setter and callers. No file-format migration; reverting code does not undo values
+already saved. Other value-changing tools and style-definition changes are outside
+this narrowly reproduced fix and require their own checks. Validation is pending.
+
+Focused validation passed 1,081 tests (workspace library/binary tests and both
+attribute integration files), none failed or ignored. All three new regressions
+passed, including the before-fix failure, all four edit paths and DXF/DWG checks.
+The Windows workspace binary build passed. The older GUI had seven clean synthetic
+documents, quit normally and left no CADCraft process; this was checked again
+immediately before the new build launched with an isolated workspace profile.
+
+Live Windows verification used the imported Arial/Top-center fixture from CC-045.
+The Attribute tab changed POWER ADAPTER to POWER ADAPTOR, Apply updated only that
+attribute, and Cancel kept the applied result. CADCraft saved/reopened synthetic
+DXF and DWG: both now store baseline X -24.82072256305385, Y 11 with unchanged
+height 4, center/top and anchor (0,15,0); DEVICE_ID stays ADPT-01, height 3,
+Left/Baseline. AutoCAD 2027 opened the new CADCraft DWG and fitted it to extents:
+the edited title remained top-centered on the green guides and the lower ID stayed
+at its original left anchor. AutoCAD did not save the fixture. No Autodesk output,
+font, screenshot or private drawing is committed. Final full CI is in progress.
+
+Additional AutoCAD readback: Insert > Edit Attribute and a pick on the unchanged
+lower ID opened Enhanced Attribute Editor for the exported DWG. Selecting DEVICE_TYPE
+confirmed POWER ADAPTOR and Text Options Standard/Top center/height 4/width 1/zero
+angles. The title itself was not picked at the tested point; this narrows the earlier
+unconfirmed picking observation and does not establish a general DWG editing failure.
+Per-attribute Properties controls were inspected separately for a future arc; they
+are not part of CC-046.
+
+Final validation: cargo xtask ci passed all six gates (fmt, Clippy, tests, assets,
+layers and wasm), with 2,364 tests passed, none failed or ignored. The complete
+staged inverse patch passed git apply --reverse --check. The three new regression
+tests, Windows build/editor edit, saved DXF/DWG checks and AutoCAD native editor
+readback above complete this narrowly scoped value-edit alignment fix.

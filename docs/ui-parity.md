@@ -1,6 +1,6 @@
 # UI parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-25 · **Change:** minor (selection-aware ribbon styles and per-reference attribute Text Options) · **Target:** Autodesk AutoCAD 2027 for Mac (26.0), with the focused Windows pass below
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-25 · **Change:** minor (selection-aware ribbon styles, attribute Text Options and value-edit export alignment) · **Target:** Autodesk AutoCAD 2027 for Mac (26.0), with the focused Windows pass below
 
 How CADCraft's interaction compares with AutoCAD's: point entry, object snaps, tracking, dynamic
 input, grips, selection, the command line, chrome and navigation. A drafter's speed in AutoCAD
@@ -293,3 +293,4 @@ the public [docking reference](https://help.autodesk.com/view/ACD/2027/ENU/?caas
 | 2026-10-25 | minor | CC-042: selection-aware Annotate dimension-style selector with manager access, locked-object guard and detached-panel support. |
 | 2026-10-25 | minor | CC-043: Annotate text-style selector, shared TEXT/MTEXT style assignment and annotative updates; current/selected/mixed state, manager access, native popup and reversal tracking. |
 | 2026-10-25 | minor | CC-045: attribute Text Options for style/justification/height/width/rotation/oblique, atomic per-reference ATTEDIT formats, Apply/Cancel/Undo and locked-target protection; live preview, text effects, multiline options and Properties tab remain open. |
+| 2026-10-25 | minor | CC-046: refresh ordinary justified attribute export baselines after real value edits through all ATTEDIT/-ATTEDIT routes; preserve no-op font offsets and Left/Aligned/Fit placement points. |

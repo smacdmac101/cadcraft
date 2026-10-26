@@ -3,7 +3,7 @@
 //! time or by replacing a string in all of them. Attribute tags match in any case, as in AutoCAD.
 
 use cadcraft_doc::color::Color;
-use cadcraft_doc::{AttribProps, Common, EntityKind, Handle};
+use cadcraft_doc::{AttribProps, Common, EntityKind, HAlign, Handle, Text, VAlign};
 use serde_json::{Map, Value, json};
 
 use crate::cmd::curves::KW;
@@ -76,7 +76,7 @@ fn run(s: &mut Session, p: &Value) -> Result<Value> {
                     a.text.clone_from(text);
                 }
                 if let Some(v) = value_for(&vals, &a.tag) {
-                    a.text.value = v;
+                    set_value(&mut a.text, v);
                     changed = true;
                 }
                 if changed {
@@ -86,6 +86,22 @@ fn run(s: &mut Session, p: &Value) -> Result<Value> {
         }
     })?;
     Ok(with_unknown_tags(s, h, &vals, json!({ "changed": n })))
+}
+
+/// Refresh ordinary justified text's derived export baseline only on an actual value change.
+/// Keep imported font placement on no-ops and the independent points of Aligned/Fit text.
+fn set_value(text: &mut Text, value: String) {
+    if text.value == value {
+        return;
+    }
+    text.value = value;
+    if !matches!((text.halign, text.valign), (HAlign::Left, VAlign::Baseline) | (HAlign::Aligned | HAlign::Fit, _))
+        && let Some(anchor) = text.align_pt
+    {
+        // The writer recognizes equal XY as an invalidated baseline cache. Preserve both Zs.
+        text.insert.x = anchor.x;
+        text.insert.y = anchor.y;
+    }
 }
 
 /// A block name, tag or value specification: comma-separated wildcard patterns, any case. For
@@ -142,7 +158,7 @@ fn edit(s: &mut Session, (h, k): (Handle, usize), f: impl FnOnce(&str) -> Option
             && let Some(a) = ins.attribs.get_mut(k)
             && let Some(v) = f(&a.text.value).filter(|v| *v != a.text.value)
         {
-            a.text.value = v;
+            set_value(&mut a.text, v);
             changed = true;
         }
     })?;
