@@ -291,6 +291,73 @@ fn visible_tabs(widths: &[f32], active: Option<usize>, room: f32) -> std::ops::R
     start..active + 1
 }
 
+fn draw_status_toggles(
+    app: &mut CadApp,
+    ui: &mut egui::Ui,
+    painter: &egui::Painter,
+    t: Tokens,
+    toggles: &[(Icon, bool, &str, &str)],
+    layout: (Rect, f32, f32),
+) {
+    let (rect, mut rx, size) = layout;
+    let mut toggle_cmd = None;
+    for &(icon, on, cmd, tip) in toggles {
+        let br = Rect::from_min_size(pos2(rx, rect.center().y - size / 2.0), vec2(size, size));
+        let resp = ui.interact(br, ui.scope_id().with(("tg", tip)), Sense::click());
+        if on {
+            painter.rect_filled(br, 3.0, t.toggle_on.gamma_multiply(0.35));
+        } else if resp.hovered() {
+            painter.rect_filled(br, 3.0, t.control_hover.gamma_multiply(0.5));
+        }
+        icons::paint(painter, br.shrink(2.5), icon, false);
+        if on {
+            // Re-tint the icon blue-ish by an underline.
+            painter.hline(br.x_range().shrink(4.0), br.bottom() - 1.0, Stroke::new(1.5, t.toggle_on));
+        }
+        icons::describe_control(ui, &resp, tip, Some(on), false);
+        if resp.on_hover_text(crate::i18n::t(tip)).clicked() {
+            toggle_cmd = Some(cmd);
+        }
+        rx += size + 4.0;
+    }
+    // The toggles don't cancel the active command (#1108); the dialog buttons start theirs.
+    match toggle_cmd {
+        Some(c) if c.starts_with("ui.") => app.start(c),
+        Some(c) => crate::menus::run_transparent(app, c),
+        None => {}
+    }
+}
+
+fn status_space_controls(app: &mut CadApp, ui: &mut egui::Ui, p: &egui::Painter, t: Tokens, r: Rect, rx: f32) -> f32 {
+    // MODEL / PAPER (layouts only): toggles MSPACE and PSPACE like AutoCAD's status button.
+    let mut coord_right = rx - 8.0;
+    // The annotation scale list (model space).
+    if status::visible(app, "annotationScale") {
+        coord_right = annoscale::status(app, ui, coord_right, r.center().y);
+    }
+    if matches!(app.session.layout_space(), cadcraft_doc::Space::Paper(_)) {
+        if status::visible(app, "paperSpace") {
+            let model = app.session.state().is_ok_and(|st| st.mspace.is_some());
+            let label = if model { "MODEL" } else { "PAPER" };
+            let br = Rect::from_min_max(pos2(rx - 60.0, r.center().y - 9.0), pos2(rx - 6.0, r.center().y + 9.0));
+            let resp = ui.interact(br, ui.scope_id().with("mspace_toggle"), Sense::click());
+            p.rect_filled(br, 3.0, if resp.hovered() { t.control_hover } else { t.toggle_on.gamma_multiply(0.25) });
+            p.text(br.center(), egui::Align2::CENTER_CENTER, crate::i18n::t(label), crate::theme::small(), t.text);
+            icons::describe_control(ui, &resp, label, None, false);
+            if resp.on_hover_text(crate::tl!("Switch between model space in a viewport and paper space")).clicked() {
+                let _ = app.run(if model { "pspace" } else { "mspace" }, json!({}));
+                app.canvas.list = None;
+            }
+            coord_right = br.left() - 10.0;
+        }
+        // Scale and lock of the active or selected viewport.
+        if status::visible(app, "viewportScale") {
+            coord_right = crate::vpscale::status(app, ui, coord_right + 4.0, r.center().y) - 10.0;
+        }
+    }
+    coord_right
+}
+
 /// Status bar: layout tabs follow the left-hand layout actions, independent of palette docking.
 /// Coordinates and drafting toggles remain on the right.
 pub fn status_bar(app: &mut CadApp, ui: &mut egui::Ui) {
@@ -346,7 +413,7 @@ pub fn status_bar(app: &mut CadApp, ui: &mut egui::Ui) {
         ];
         toggles.retain(|(_, _, command, _)| status::visible(app, status::command_id(command)));
         let size = 20.0;
-        let mut rx = r.right() - 32.0 - toggles.len() as f32 * (size + 4.0);
+        let rx = r.right() - 32.0 - toggles.len() as f32 * (size + 4.0);
         // Coordinates.
         let coord = app.canvas.cursor.filter(|_| status::visible(app, "coordinates")).map(|c| {
             let (lu, lp) = app.session.doc().map(|d| (d.header.i64("LUNITS", 2), d.header.i64("LUPREC", 4))).unwrap_or((2, 4));
@@ -357,32 +424,7 @@ pub fn status_bar(app: &mut CadApp, ui: &mut egui::Ui) {
                 cadcraft_engine::units::format_distance(0.0, lu, lp)
             )
         });
-        // MODEL / PAPER (layouts only): toggles MSPACE and PSPACE like AutoCAD's status button.
-        let mut coord_right = rx - 8.0;
-        // The annotation scale list (model space).
-        if status::visible(app, "annotationScale") {
-            coord_right = annoscale::status(app, ui, coord_right, r.center().y);
-        }
-        if matches!(app.session.layout_space(), cadcraft_doc::Space::Paper(_)) {
-            if status::visible(app, "paperSpace") {
-                let model = app.session.state().is_ok_and(|st| st.mspace.is_some());
-                let label = if model { "MODEL" } else { "PAPER" };
-                let br = Rect::from_min_max(pos2(rx - 60.0, r.center().y - 9.0), pos2(rx - 6.0, r.center().y + 9.0));
-                let resp = ui.interact(br, ui.scope_id().with("mspace_toggle"), Sense::click());
-                p.rect_filled(br, 3.0, if resp.hovered() { t.control_hover } else { t.toggle_on.gamma_multiply(0.25) });
-                p.text(br.center(), egui::Align2::CENTER_CENTER, crate::i18n::t(label), crate::theme::small(), t.text);
-                icons::describe_control(ui, &resp, label, None, false);
-                if resp.on_hover_text(crate::tl!("Switch between model space in a viewport and paper space")).clicked() {
-                    let _ = app.run(if model { "pspace" } else { "mspace" }, json!({}));
-                    app.canvas.list = None;
-                }
-                coord_right = br.left() - 10.0;
-            }
-            // Scale and lock of the active or selected viewport.
-            if status::visible(app, "viewportScale") {
-                coord_right = crate::vpscale::status(app, ui, coord_right + 4.0, r.center().y) - 10.0;
-            }
-        }
+        let coord_right = status_space_controls(app, ui, &p, t, r, rx);
         // Layout tabs: Model, "+", then the layouts that fit before the right-hand controls (the
         // current one always); the layout list reaches the rest.
         let mut tabs: Vec<String> = vec!["Model".into()];
@@ -495,32 +537,7 @@ pub fn status_bar(app: &mut CadApp, ui: &mut egui::Ui) {
                 ui.interact(rect, ui.scope_id().with("status_readout"), Sense::hover()).on_hover_text(text);
             }
         }
-        let mut toggle_cmd = None;
-        for (icon, on, cmd, tip) in toggles {
-            let br = Rect::from_min_size(pos2(rx, r.center().y - size / 2.0), vec2(size, size));
-            let resp = ui.interact(br, ui.scope_id().with(("tg", tip)), Sense::click());
-            if on {
-                p.rect_filled(br, 3.0, t.toggle_on.gamma_multiply(0.35));
-            } else if resp.hovered() {
-                p.rect_filled(br, 3.0, t.control_hover.gamma_multiply(0.5));
-            }
-            icons::paint(&p, br.shrink(2.5), icon, false);
-            if on {
-                // Re-tint the icon blue-ish by an underline.
-                p.hline(br.x_range().shrink(4.0), br.bottom() - 1.0, Stroke::new(1.5, t.toggle_on));
-            }
-            icons::describe_control(ui, &resp, tip, Some(on), false);
-            if resp.on_hover_text(crate::i18n::t(tip)).clicked() {
-                toggle_cmd = Some(cmd);
-            }
-            rx += size + 4.0;
-        }
-        // The toggles don't cancel the active command (#1108); the dialog buttons start theirs.
-        match toggle_cmd {
-            Some(c) if c.starts_with("ui.") => app.start(c),
-            Some(c) => crate::menus::run_transparent(app, c),
-            None => {}
-        }
+        draw_status_toggles(app, ui, &p, t, &toggles, (r, rx, size));
         let br = Rect::from_min_size(pos2(r.right() - 28.0, r.center().y - 10.0), vec2(20.0, 20.0));
         let customize = ui.interact(br, ui.scope_id().with("status_customize"), Sense::click());
         icons::paint(&p, br.shrink(2.5), Icon::Menu, false);
@@ -579,7 +596,7 @@ pub fn start_page(app: &mut CadApp, ui: &mut egui::Ui) {
         y += 46.0;
     }
     if let Some(path) = recent {
-        app.open_path(&path);
+        app.open_path(std::path::Path::new(&path));
     } else if app.ui.recent_files.is_empty() {
         p.text(
             pos2(main.center().x, main.center().y),
